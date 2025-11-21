@@ -1,0 +1,14 @@
+{
+  "name": "emailboy",
+  "version": "1.0.0",
+  "description": "Chrome extension to automatically find and collect email addresses while browsing",
+  "keywords": [
+    "chrome-extension",
+    "email",
+    "scraper",
+    "collector"
+  ],
+  "author": "",
+  "license": "MIT"
+}
+

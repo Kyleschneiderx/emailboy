@@ -1,0 +1,18 @@
+node_modules/
+emails.json
+*.log
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Build outputs
+portal/dist/
+portal/.vite/
+
+# Environment files
+.env
+.env.local
+portal/.env
+portal/.env.local
+

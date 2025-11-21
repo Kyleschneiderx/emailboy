@@ -1,0 +1,486 @@
+{
+  "design_system": {
+    "metadata": {
+      "name": "Marketing Intelligence Dashboard",
+      "type": "SaaS Analytics Platform",
+      "style": "Modern Minimal",
+      "complexity": "Enterprise",
+      "primary_use": "Data visualization and lead management"
+    },
+    "color_palette": {
+      "primary": {
+        "background": "#F5F5F7",
+        "surface": "#FFFFFF",
+        "surface_elevated": "#FFFFFF"
+      },
+      "accent": {
+        "primary": "#FF5733",
+        "secondary": "#4A90E2",
+        "tertiary": "#A0A0A0"
+      },
+      "semantic": {
+        "success": "#4CAF50",
+        "warning": "#FFA726",
+        "danger": "#FF5733",
+        "neutral": "#9E9E9E",
+        "positive_change": "#4CAF50",
+        "negative_change": "#FF5733"
+      },
+      "text": {
+        "primary": "#1A1A1A",
+        "secondary": "#666666",
+        "tertiary": "#999999",
+        "on_accent": "#FFFFFF"
+      },
+      "status_labels": {
+        "needs_review": "#FF5733",
+        "good": "#4CAF50",
+        "neutral": "#FFA726"
+      }
+    },
+    "typography": {
+      "font_family": {
+        "primary": "Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+        "monospace": "SF Mono, Monaco, Courier New, monospace"
+      },
+      "scale": {
+        "display": {
+          "size": "48px",
+          "weight": 700,
+          "line_height": 1.1
+        },
+        "h1": {
+          "size": "32px",
+          "weight": 600,
+          "line_height": 1.2
+        },
+        "h2": {
+          "size": "24px",
+          "weight": 600,
+          "line_height": 1.3
+        },
+        "h3": {
+          "size": "18px",
+          "weight": 600,
+          "line_height": 1.4
+        },
+        "body_large": {
+          "size": "16px",
+          "weight": 400,
+          "line_height": 1.5
+        },
+        "body": {
+          "size": "14px",
+          "weight": 400,
+          "line_height": 1.5
+        },
+        "body_small": {
+          "size": "12px",
+          "weight": 400,
+          "line_height": 1.4
+        },
+        "caption": {
+          "size": "11px",
+          "weight": 400,
+          "line_height": 1.3
+        },
+        "metric_large": {
+          "size": "32px",
+          "weight": 700,
+          "line_height": 1
+        },
+        "metric_medium": {
+          "size": "24px",
+          "weight": 600,
+          "line_height": 1
+        }
+      }
+    },
+    "spacing": {
+      "scale": [0, 4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 80],
+      "component_padding": {
+        "compact": "8px 12px",
+        "default": "12px 16px",
+        "comfortable": "16px 24px"
+      },
+      "section_spacing": "24px",
+      "card_padding": "20px 24px",
+      "grid_gap": "16px"
+    },
+    "border_radius": {
+      "small": "4px",
+      "medium": "8px",
+      "large": "12px",
+      "xl": "16px",
+      "full": "9999px"
+    },
+    "shadows": {
+      "none": "none",
+      "subtle": "0 1px 3px rgba(0, 0, 0, 0.04)",
+      "small": "0 2px 8px rgba(0, 0, 0, 0.06)",
+      "medium": "0 4px 16px rgba(0, 0, 0, 0.08)",
+      "large": "0 8px 24px rgba(0, 0, 0, 0.12)"
+    },
+    "layout": {
+      "structure": {
+        "type": "sidebar + main content",
+        "sidebar_width": "240px",
+        "sidebar_collapsed_width": "64px",
+        "header_height": "64px",
+        "content_max_width": "1440px",
+        "content_padding": "24px"
+      },
+      "grid": {
+        "columns": 12,
+        "gutter": "16px",
+        "breakpoints": {
+          "mobile": "320px",
+          "tablet": "768px",
+          "desktop": "1024px",
+          "wide": "1440px"
+        }
+      }
+    },
+    "components": {
+      "sidebar_navigation": {
+        "style": "vertical_list",
+        "item_height": "44px",
+        "item_padding": "12px 16px",
+        "item_border_radius": "8px",
+        "icon_size": "20px",
+        "icon_margin_right": "12px",
+        "active_state": {
+          "background": "#FFFFFF",
+          "shadow": "0 1px 3px rgba(0, 0, 0, 0.06)"
+        },
+        "hover_state": {
+          "background": "rgba(0, 0, 0, 0.03)"
+        },
+        "nested_indent": "24px"
+      },
+      "metric_card": {
+        "layout": "horizontal",
+        "padding": "16px 20px",
+        "border_radius": "8px",
+        "background": "#FFFFFF",
+        "structure": {
+          "label": {
+            "font_size": "12px",
+            "color": "#666666",
+            "weight": 400,
+            "margin_bottom": "4px"
+          },
+          "value": {
+            "font_size": "24px",
+            "weight": 600,
+            "color": "#1A1A1A"
+          },
+          "change_indicator": {
+            "font_size": "12px",
+            "weight": 500,
+            "margin_left": "8px",
+            "display": "inline",
+            "positive_color": "#4CAF50",
+            "negative_color": "#FF5733"
+          }
+        }
+      },
+      "chart_container": {
+        "padding": "20px 24px",
+        "background": "#FFFFFF",
+        "border_radius": "12px",
+        "min_height": "300px",
+        "header": {
+          "margin_bottom": "16px",
+          "display": "flex",
+          "justify_content": "space-between",
+          "align_items": "center"
+        },
+        "legend": {
+          "display": "horizontal",
+          "item_spacing": "20px",
+          "indicator_size": "8px",
+          "indicator_margin_right": "8px"
+        }
+      },
+      "data_table": {
+        "background": "#FFFFFF",
+        "border_radius": "12px",
+        "row_height": "56px",
+        "header": {
+          "background": "transparent",
+          "border_bottom": "1px solid #E0E0E0",
+          "font_size": "11px",
+          "font_weight": 500,
+          "text_transform": "uppercase",
+          "color": "#999999",
+          "letter_spacing": "0.5px"
+        },
+        "cell": {
+          "padding": "16px",
+          "border_bottom": "1px solid #F0F0F0",
+          "font_size": "14px"
+        },
+        "row_hover": {
+          "background": "#F9F9F9"
+        },
+        "expandable_row": {
+          "background": "#F5F5F7",
+          "padding": "20px",
+          "border_radius": "0 0 8px 8px"
+        }
+      },
+      "status_badge": {
+        "padding": "4px 10px",
+        "border_radius": "4px",
+        "font_size": "11px",
+        "font_weight": 500,
+        "text_transform": "uppercase",
+        "letter_spacing": "0.3px",
+        "variants": {
+          "needs_review": {
+            "background": "#FFF3F0",
+            "color": "#FF5733",
+            "border": "1px solid #FFE0D9"
+          },
+          "good": {
+            "background": "#F0F9F4",
+            "color": "#4CAF50",
+            "border": "1px solid #D4EDD9"
+          },
+          "neutral": {
+            "background": "#FFF8E6",
+            "color": "#FFA726",
+            "border": "1px solid #FFE8B3"
+          }
+        }
+      },
+      "button": {
+        "variants": {
+          "primary": {
+            "background": "#FF5733",
+            "color": "#FFFFFF",
+            "border": "none",
+            "hover_background": "#E64A2E"
+          },
+          "secondary": {
+            "background": "#FFFFFF",
+            "color": "#666666",
+            "border": "1px solid #E0E0E0",
+            "hover_background": "#F9F9F9"
+          },
+          "ghost": {
+            "background": "transparent",
+            "color": "#666666",
+            "border": "none",
+            "hover_background": "rgba(0, 0, 0, 0.04)"
+          }
+        },
+        "sizes": {
+          "small": {
+            "padding": "6px 12px",
+            "font_size": "12px",
+            "border_radius": "6px"
+          },
+          "medium": {
+            "padding": "10px 16px",
+            "font_size": "14px",
+            "border_radius": "8px"
+          },
+          "large": {
+            "padding": "12px 24px",
+            "font_size": "16px",
+            "border_radius": "8px"
+          }
+        },
+        "icon_button": {
+          "size": "36px",
+          "border_radius": "8px",
+          "icon_size": "18px"
+        }
+      },
+      "card": {
+        "background": "#FFFFFF",
+        "border_radius": "12px",
+        "padding": "20px 24px",
+        "shadow": "0 1px 3px rgba(0, 0, 0, 0.04)",
+        "border": "1px solid rgba(0, 0, 0, 0.06)",
+        "hover_shadow": "0 4px 12px rgba(0, 0, 0, 0.08)"
+      },
+      "score_indicator": {
+        "type": "circular_progress",
+        "size": "80px",
+        "stroke_width": "8px",
+        "background_stroke": "#F0F0F0",
+        "foreground_stroke": "#FF5733",
+        "text": {
+          "primary_size": "24px",
+          "primary_weight": 700,
+          "secondary_size": "10px",
+          "secondary_weight": 400,
+          "secondary_color": "#999999"
+        }
+      },
+      "thumbnail_grid": {
+        "gap": "12px",
+        "item_border_radius": "8px",
+        "item_aspect_ratio": "1:1",
+        "overlay": {
+          "background": "rgba(0, 0, 0, 0.6)",
+          "text_color": "#FFFFFF",
+          "font_size": "11px",
+          "padding": "4px 8px"
+        }
+      },
+      "stat_widget": {
+        "padding": "16px 20px",
+        "background": "#FFFFFF",
+        "border_radius": "12px",
+        "label": {
+          "font_size": "12px",
+          "color": "#666666",
+          "margin_bottom": "8px"
+        },
+        "value": {
+          "font_size": "24px",
+          "font_weight": 600,
+          "color": "#1A1A1A"
+        },
+        "change": {
+          "font_size": "12px",
+          "font_weight": 500,
+          "margin_top": "4px"
+        }
+      },
+      "bar_chart_mini": {
+        "height": "80px",
+        "bar_width": "20px",
+        "bar_gap": "8px",
+        "bar_radius": "4px",
+        "color": "#4A90E2",
+        "label_size": "10px",
+        "label_color": "#999999"
+      }
+    },
+    "patterns": {
+      "metric_header": {
+        "layout": "grid",
+        "grid_columns": "repeat(auto-fit, minmax(140px, 1fr))",
+        "gap": "16px",
+        "margin_bottom": "24px"
+      },
+      "content_sections": {
+        "spacing": "24px",
+        "title_margin_bottom": "16px"
+      },
+      "dashboard_grid": {
+        "display": "grid",
+        "columns": "2fr 1fr",
+        "gap": "24px",
+        "responsive_breakpoint": "1024px"
+      },
+      "list_with_details": {
+        "row_structure": "expandable",
+        "expansion_trigger": "click_row",
+        "expansion_animation": "slide_down",
+        "expansion_duration": "200ms"
+      }
+    },
+    "interactions": {
+      "hover_effects": {
+        "table_row": {
+          "transition": "background-color 150ms ease",
+          "background": "#F9F9F9"
+        },
+        "button": {
+          "transition": "all 150ms ease",
+          "transform": "translateY(-1px)",
+          "shadow_increase": true
+        },
+        "card": {
+          "transition": "all 200ms ease",
+          "shadow_increase": true,
+          "border_color_change": true
+        }
+      },
+      "transitions": {
+        "default": "150ms ease",
+        "slow": "300ms ease",
+        "fast": "100ms ease"
+      },
+      "click_states": {
+        "scale": 0.98,
+        "duration": "100ms"
+      }
+    },
+    "data_visualization": {
+      "line_chart": {
+        "line_width": "2px",
+        "point_radius": "4px",
+        "grid_color": "rgba(0, 0, 0, 0.06)",
+        "axis_color": "#E0E0E0",
+        "axis_label_color": "#999999",
+        "axis_label_size": "11px",
+        "tooltip": {
+          "background": "#1A1A1A",
+          "color": "#FFFFFF",
+          "padding": "8px 12px",
+          "border_radius": "6px",
+          "font_size": "12px"
+        }
+      },
+      "color_scheme": {
+        "multi_series": ["#FF5733", "#4A90E2", "#A0A0A0", "#4CAF50", "#FFA726"],
+        "sequential": ["#FFE0D9", "#FFB3A3", "#FF856D", "#FF5733", "#E64A2E"],
+        "diverging": ["#4CAF50", "#A0A0A0", "#FF5733"]
+      }
+    },
+    "responsive_behavior": {
+      "sidebar": {
+        "mobile": "drawer_overlay",
+        "tablet": "collapsible",
+        "desktop": "persistent"
+      },
+      "metrics": {
+        "mobile": "stack_vertical",
+        "tablet": "2_column",
+        "desktop": "horizontal_scroll"
+      },
+      "table": {
+        "mobile": "card_view",
+        "tablet": "horizontal_scroll",
+        "desktop": "full_table"
+      }
+    },
+    "accessibility": {
+      "focus_visible": {
+        "outline": "2px solid #4A90E2",
+        "outline_offset": "2px",
+        "border_radius": "4px"
+      },
+      "minimum_contrast": "4.5:1",
+      "minimum_touch_target": "44px"
+    }
+  },
+  "implementation_notes": {
+    "key_principles": [
+      "Clean, minimal aesthetic with ample whitespace",
+      "Data-first design - metrics and visualizations are primary focus",
+      "Subtle shadows and borders for depth without heaviness",
+      "Consistent use of rounded corners (8-12px) throughout",
+      "Color used sparingly and meaningfully for status and accents",
+      "Typography hierarchy emphasizes metrics with large, bold numbers",
+      "Cards as primary container pattern with consistent padding",
+      "Hover states are subtle but provide clear feedback"
+    ],
+    "common_patterns": [
+      "Metrics displayed horizontally with value + change indicator",
+      "Tables with expandable rows for additional details",
+      "Right sidebar for supplementary information and widgets",
+      "Icon + text navigation with clear active states",
+      "Status badges using color-coded backgrounds with low opacity"
+    ],
+    "design_philosophy": "Enterprise SaaS dashboard focused on clarity, scannability, and data density without overwhelming the user. Every element serves a functional purpose."
+  }
+}
+
