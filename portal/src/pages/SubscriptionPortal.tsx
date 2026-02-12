@@ -142,12 +142,20 @@ export function SubscriptionPortal() {
       }
     }), [accessToken]);
 
-  // Handle checkout success/cancel from URL
+  // Handle URL params (checkout, view)
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const checkout = urlParams.get('checkout');
     const message = urlParams.get('message');
     const upgrade = urlParams.get('upgrade');
+    const view = urlParams.get('view');
+
+    if (view === 'emails') {
+      setActiveView('emails');
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete('view');
+      window.history.replaceState({}, '', newUrl.toString());
+    }
 
     if (upgrade === 'true' && accessToken && !data?.isPremium) {
       const newUrl = new URL(window.location.href);
@@ -540,13 +548,38 @@ export function SubscriptionPortal() {
               </p>
             </div>
             {emails.length > 0 && isPremium && (
-              <Button variant="secondary" onClick={loadEmails} disabled={emailsLoading}>
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 12a9 9 0 11-9-9" />
-                  <path d="M21 3v9h-9" />
-                </svg>
-                Refresh
-              </Button>
+              <div className="flex gap-3">
+                <Button variant="secondary" onClick={loadEmails} disabled={emailsLoading}>
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 12a9 9 0 11-9-9" />
+                    <path d="M21 3v9h-9" />
+                  </svg>
+                  Refresh
+                </Button>
+                <Button variant="secondary" onClick={() => {
+                  const csv = [
+                    'Email,Domain,URL,First Seen,Last Seen',
+                    ...emails.map(e => {
+                      const urls = e.urls?.join('; ') || e.url || '';
+                      return `"${e.email}","${e.domain}","${urls}","${e.timestamp}","${e.lastSeen}"`;
+                    })
+                  ].join('\n');
+                  const blob = new Blob([csv], { type: 'text/csv' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `emailboy-${new Date().toISOString().split('T')[0]}.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}>
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                    <path d="M7 10l5 5 5-5" />
+                    <path d="M12 15V3" />
+                  </svg>
+                  Export CSV
+                </Button>
+              </div>
             )}
           </div>
         </Card>

@@ -495,28 +495,27 @@ async function handleSync() {
 }
 
 function handleExport() {
-  if (allEmails.length === 0) {
-    showNotification('No emails to export', 'error');
+  if (!isPremium) {
+    showNotification('Upgrade to Premium to export emails', 'error');
     return;
   }
 
-  const csv = [
-    'Email,Domain,URL,Last Seen',
-    ...allEmails.map(item => {
-      const urls = item.urls || [item.url];
-      return `"${item.email}","${item.domain}","${urls.join('; ')}","${item.lastSeen || item.timestamp}"`;
-    })
-  ].join('\n');
+  // Redirect to portal emails page for export
+  if (!currentSession?.access_token) {
+    showNotification('Please sign in first', 'error');
+    return;
+  }
 
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `emailboy-${new Date().toISOString().split('T')[0]}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  const sessionData = {
+    access_token: currentSession.access_token,
+    refresh_token: currentSession.refresh_token,
+    expires_at: currentSession.expires_at,
+    user: currentSession.user || currentUser
+  };
 
-  showNotification('CSV exported', 'success');
+  const encoded = btoa(JSON.stringify(sessionData));
+  const portalUrl = `${CONFIG.portalUrl}?session=${encodeURIComponent(encoded)}&view=emails`;
+  chrome.tabs.create({ url: portalUrl });
 }
 
 function handleOpenPortal() {
