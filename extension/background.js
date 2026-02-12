@@ -287,9 +287,6 @@ async function checkPremiumStatus(forceRefresh = false) {
 async function handleNewEmails(emails, url, timestamp) {
   try {
     const isPremium = premiumCache.isPremium || (await checkPremiumStatus());
-    if (!isPremium) {
-      return { success: false, reason: 'premium_required' };
-    }
 
     const result = await chrome.storage.local.get(['emails', 'settings']);
     const existingEmails = result.emails || [];
@@ -325,7 +322,7 @@ async function handleNewEmails(emails, url, timestamp) {
     await chrome.storage.local.set({ emails: updatedEmails });
     updateBadge(updatedEmails.length);
 
-    if (settings.autoSync !== false && addedCount > 0) {
+    if (isPremium && settings.autoSync !== false && addedCount > 0) {
       syncToSupabase().catch(err => console.error('Auto-sync error:', err));
     }
 
