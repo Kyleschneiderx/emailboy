@@ -29,7 +29,8 @@ export function isTokenExpired(session: Session | null): boolean {
 }
 
 /**
- * Validates if a session exists and is valid (basic check only)
+ * Validates if a session exists and has required fields.
+ * Does NOT reject based on token expiry — refresh handles that.
  */
 export function isValidSession(session: Session | null): boolean {
   if (!session) {
@@ -44,11 +45,7 @@ export function isValidSession(session: Session | null): boolean {
     console.log('[Session Validation] Session missing user');
     return false;
   }
-  const expired = isTokenExpired(session);
-  if (expired) {
-    console.log('[Session Validation] Token is expired');
-  }
-  return !expired;
+  return true;
 }
 
 /**
@@ -93,11 +90,13 @@ export async function validateSessionWithServer(session: Session | null): Promis
 }
 
 /**
- * Attempts to refresh the session if it's expired
+ * Attempts to refresh the session if it's expired.
+ * Pass force=true to refresh even if the token doesn't appear expired
+ * (e.g. when the server already rejected it with 401).
  */
-export async function refreshSessionIfNeeded(session: Session | null): Promise<Session | null> {
+export async function refreshSessionIfNeeded(session: Session | null, force = false): Promise<Session | null> {
   if (!session) return null;
-  if (!isTokenExpired(session)) return session;
+  if (!force && !isTokenExpired(session)) return session;
 
   // If we have a refresh token, try to refresh
   if (!session.refresh_token) {
@@ -142,76 +141,40 @@ export async function refreshSessionIfNeeded(session: Session | null): Promise<S
 }
 
 /**
- * Gets a valid session, refreshing if necessary
- * On initial load, we skip server validation to allow the session to be used
- * Server validation will happen when making API calls
+ * Gets a valid session, refreshing if necessary.
+ * Never clears the session unless there's truly no way to recover.
+ * If the token is expired, tries refresh. If refresh fails, still returns the
+ * session so API calls can attempt to use it (the server is the final judge).
  */
-export async function getValidSession(skipServerValidation = false): Promise<Session | null> {
+export async function getValidSession(_skipServerValidation = false): Promise<Session | null> {
   const session = getStoredSession();
-  
+
   if (!session) {
     console.log('[Session Validation] No session found');
     return null;
   }
-  
-  console.log('[Session Validation] Validating session:', {
-    hasAccessToken: !!session.access_token,
-    hasUser: !!session.user,
-    expiresAt: session.expires_at,
-    skipServerValidation
-  });
-  
+
   // Basic validation - check if session has required fields
   if (!session.access_token || !session.user) {
     console.log('[Session Validation] Session missing required fields');
     return null;
   }
-  
-  // Check if token is expired
+
+  // If token is expired, try to refresh silently
   if (isTokenExpired(session)) {
     console.log('[Session Validation] Token expired, attempting refresh...');
-    // Try to refresh
     const refreshed = await refreshSessionIfNeeded(session);
     if (refreshed) {
       console.log('[Session Validation] Session refreshed successfully');
       return refreshed;
     }
-    
-    // If refresh failed and we're not skipping server validation, check with server
-    if (!skipServerValidation) {
-      console.log('[Session Validation] Refresh failed, validating with server...');
-      const isValid = await validateSessionWithServer(session);
-      if (!isValid) {
-        console.log('[Session Validation] Server validation failed, clearing session');
-        if (typeof Storage !== 'undefined') {
-          localStorage.removeItem('supabaseSession');
-        }
-        return null;
-      }
-      console.log('[Session Validation] Server validation passed despite expiration');
-    } else {
-      console.log('[Session Validation] Skipping server validation, using expired session (will validate on API call)');
-    }
+    // Refresh failed — return the existing session anyway.
+    // The actual API call will be the final judge; if it 401s the
+    // API layer will handle clearing.
+    console.log('[Session Validation] Refresh failed, returning existing session');
     return session;
   }
 
-  // If not skipping server validation, validate with server
-  if (!skipServerValidation) {
-    console.log('[Session Validation] Token not expired, validating with server...');
-    const serverValid = await validateSessionWithServer(session);
-    if (!serverValid) {
-      console.log('[Session Validation] Server validation failed, clearing session');
-      if (typeof Storage !== 'undefined') {
-        localStorage.removeItem('supabaseSession');
-      }
-      return null;
-    }
-    console.log('[Session Validation] Server validation passed');
-  } else {
-    console.log('[Session Validation] Skipping server validation (will validate on API call)');
-  }
-
-  console.log('[Session Validation] Session is valid');
   return session;
 }
 

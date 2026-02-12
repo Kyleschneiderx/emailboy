@@ -3,7 +3,12 @@ import type { Session } from '@supabase/supabase-js';
 import { supabaseConfig } from '../config/supabase';
 
 export const supabase = supabaseConfig.url && supabaseConfig.anonKey
-  ? createClient(supabaseConfig.url, supabaseConfig.anonKey)
+  ? createClient(supabaseConfig.url, supabaseConfig.anonKey, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+      },
+    })
   : null;
 
 /**

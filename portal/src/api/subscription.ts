@@ -1,4 +1,6 @@
 import { supabaseConfig } from '../config/supabase';
+import { refreshSessionIfNeeded } from '../lib/sessionValidation';
+import { getStoredSession } from '../lib/supabaseClient';
 
 const functionsUrl = supabaseConfig.functionsUrl;
 
@@ -11,7 +13,7 @@ async function request<T>(path: string, token: string, options?: RequestInit) {
     throw new Error('Authentication token is required.');
   }
 
-  const response = await fetch(`${functionsUrl}/${path}`, {
+  let response = await fetch(`${functionsUrl}/${path}`, {
     ...options,
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -20,12 +22,27 @@ async function request<T>(path: string, token: string, options?: RequestInit) {
     },
   });
 
+  // On auth failure, try to refresh the token and retry once
+  if (response.status === 401 || response.status === 403) {
+    const currentSession = getStoredSession();
+    const refreshed = await refreshSessionIfNeeded(currentSession, true);
+    if (refreshed) {
+      response = await fetch(`${functionsUrl}/${path}`, {
+        ...options,
+        headers: {
+          'Authorization': `Bearer ${refreshed.access_token}`,
+          'Content-Type': 'application/json',
+          ...(options?.headers || {}),
+        },
+      });
+    }
+  }
+
   const data = await response.json();
 
   if (!response.ok) {
-    // Handle authentication errors specifically
     if (response.status === 401 || response.status === 403) {
-      // Clear invalid session
+      // Refresh already failed above — clear session as last resort
       if (typeof Storage !== 'undefined') {
         localStorage.removeItem('supabaseSession');
       }
@@ -43,6 +60,7 @@ export interface SubscriptionData {
     plan: string;
     status: string;
     current_period_end: string;
+    cancel_at_period_end?: boolean;
   } | null;
 }
 
