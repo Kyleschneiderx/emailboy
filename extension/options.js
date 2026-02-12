@@ -3,7 +3,7 @@
 const CONFIG = {
   supabaseUrl: 'https://xgllxidtqbkftsbhiinl.supabase.co',
   supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhnbGx4aWR0cWJrZnRzYmhpaW5sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMxNTY2NzEsImV4cCI6MjA3ODczMjY3MX0.gCK3wRjpVF-BFwaLrF_3P4Rb3-lbFPqeu7JxHRQKky4',
-  portalUrl: 'https://portal-six-henna.vercel.app',
+  portalUrl: 'https://portal.emailextractorextension.com',
   functionsUrl: 'https://xgllxidtqbkftsbhiinl.supabase.co/functions/v1'
 };
 

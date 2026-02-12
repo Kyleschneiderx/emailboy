@@ -10,6 +10,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Default portal URL - override with PORTAL_URL env var
+const DEFAULT_PORTAL_URL = 'https://portal.emailextractorextension.com'
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -17,8 +20,31 @@ serve(async (req) => {
   }
 
   try {
+    const stripeKey = Deno.env.get('STRIPE_SECRET_KEY')
+    const priceId = Deno.env.get('STRIPE_PRICE_ID')
+    const portalUrl = Deno.env.get('PORTAL_URL') || DEFAULT_PORTAL_URL
+
+    console.log('Environment check:')
+    console.log('- STRIPE_SECRET_KEY:', stripeKey ? 'SET' : 'MISSING')
+    console.log('- STRIPE_PRICE_ID:', priceId ? priceId : 'MISSING')
+    console.log('- PORTAL_URL:', portalUrl)
+
+    if (!stripeKey) {
+      return new Response(
+        JSON.stringify({ error: 'Stripe secret key not configured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    if (!priceId) {
+      return new Response(
+        JSON.stringify({ error: 'Stripe price ID not configured. Please set STRIPE_PRICE_ID in Edge Function secrets.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     // Initialize Stripe
-    const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') ?? '', {
+    const stripe = new Stripe(stripeKey, {
       apiVersion: '2023-10-16',
     })
 
@@ -42,69 +68,72 @@ serve(async (req) => {
     if (authError || !user) {
       return new Response(
         JSON.stringify({ error: 'Unauthorized. Please sign in.' }),
-        { 
-          status: 401, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Get price ID from request or use default
-    const { priceId } = await req.json()
-    const PRICE_ID = priceId || Deno.env.get('STRIPE_PRICE_ID') || ''
+    console.log('Creating checkout for user:', user.id, 'email:', user.email)
+    console.log('Using price ID:', priceId)
 
-    if (!PRICE_ID) {
+    // Check if user already has an active subscription
+    const { data: existingSub } = await supabaseClient
+      .from('user_subscriptions')
+      .select('status, stripe_customer_id')
+      .eq('user_id', user.id)
+      .single()
+
+    if (existingSub?.status === 'active') {
       return new Response(
-        JSON.stringify({ error: 'Stripe price ID not configured' }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        JSON.stringify({ error: 'You already have an active subscription' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Get portal URL from environment or use default
-    const PORTAL_URL = Deno.env.get('PORTAL_URL') || 'http://localhost:5173'
-    
-    // Create Stripe checkout session
-    const session = await stripe.checkout.sessions.create({
-      customer_email: user.email,
+    // Create checkout session options
+    const sessionOptions: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ['card'],
       line_items: [
         {
-          price: PRICE_ID,
+          price: priceId,
           quantity: 1,
         },
       ],
       mode: 'subscription',
-      success_url: `${PORTAL_URL}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${PORTAL_URL}?checkout=cancel`,
+      success_url: `${portalUrl}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${portalUrl}?checkout=cancel`,
       metadata: {
         user_id: user.id,
       },
       client_reference_id: user.id,
-    })
+    }
+
+    // If user has existing customer ID, use it
+    if (existingSub?.stripe_customer_id) {
+      sessionOptions.customer = existingSub.stripe_customer_id
+    } else {
+      sessionOptions.customer_email = user.email
+    }
+
+    // Create Stripe checkout session
+    const session = await stripe.checkout.sessions.create(sessionOptions)
+
+    console.log('Checkout session created:', session.id)
+    console.log('Checkout URL:', session.url)
 
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         sessionId: session.id,
         url: session.url
       }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error: any) {
     console.error('Create checkout error:', error)
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: error.message || 'Failed to create checkout session'
       }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })
-
