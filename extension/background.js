@@ -322,7 +322,7 @@ async function handleNewEmails(emails, url, timestamp) {
     await chrome.storage.local.set({ emails: updatedEmails });
     updateBadge(updatedEmails.length);
 
-    if (isPremium && settings.autoSync !== false && addedCount > 0) {
+    if (settings.autoSync !== false && addedCount > 0) {
       syncToSupabase().catch(err => console.error('Auto-sync error:', err));
     }
 
