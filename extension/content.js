@@ -357,13 +357,7 @@
 
     isRunning = true;
 
-    checkPremium(function(isPremium) {
-      if (!isPremium) {
-        console.log('[EmailBoy] Not premium - skipping');
-        isRunning = false;
-        return;
-      }
-
+    checkPremium(function() {
       // Get page HTML
       const html = document.body ? document.body.innerHTML : '';
 
