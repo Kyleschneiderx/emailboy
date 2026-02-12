@@ -10,7 +10,7 @@ import { Skeleton } from '../components/ui/Skeleton';
 import { subscriptionApi, type SubscriptionData, type EmailData } from '../api/subscription';
 import { useSupabaseSession } from '../hooks/useSupabaseSession';
 import { AuthGuard } from '../components/AuthGuard';
-import { getValidSession, validateSessionWithServer } from '../lib/sessionValidation';
+import { getValidSession } from '../lib/sessionValidation';
 import { supabaseConfig } from '../config/supabase';
 
 type Action = 'portal' | 'upgrade';
@@ -32,7 +32,7 @@ export function SubscriptionPortal() {
     upgrade: false,
   });
   const [activeView, setActiveView] = useState<ViewKey>('subscriptions');
-  
+
   // Emails state
   const [emails, setEmails] = useState<EmailData[]>([]);
   const [emailsLoading, setEmailsLoading] = useState(false);
@@ -46,7 +46,6 @@ export function SubscriptionPortal() {
       return;
     }
 
-    // Get session (skip strict validation - let API call validate it)
     const validSession = await getValidSession(true);
     if (!validSession || !validSession.access_token) {
       console.log('[LoadData] No valid session found');
@@ -55,23 +54,15 @@ export function SubscriptionPortal() {
       return;
     }
 
-    console.log('[LoadData] Attempting to fetch subscription with session:', {
-      hasToken: !!validSession.access_token,
-      hasUser: !!validSession.user
-    });
-
     setLoading(true);
     setError(null);
     try {
-      // Make API call - this will validate the session on the server
       const response = await subscriptionApi.fetchSubscription(validSession.access_token);
-      console.log('[LoadData] Subscription data received:', response);
       setData(response);
     } catch (err) {
       console.error('[LoadData] Error fetching subscription:', err);
       if (err instanceof Error && (err.message.includes('Unauthorized') || err.message.includes('Session expired'))) {
         setError('Session expired. Please sign in again.');
-        // Clear invalid session
         if (typeof Storage !== 'undefined') {
           localStorage.removeItem('supabaseSession');
         }
@@ -121,15 +112,14 @@ export function SubscriptionPortal() {
     }
   }, [accessToken, loadData]);
 
-  const handleUpgrade = () =>
+  const handleUpgrade = useCallback(() =>
     handleAction('upgrade', async () => {
       if (!accessToken) return;
       const validSession = await getValidSession(true);
       if (!validSession || !validSession.access_token) {
         throw new Error('Session not found. Please sign in again.');
       }
-      
-      // Create checkout session
+
       const response = await fetch(`${supabaseConfig.functionsUrl}/create-checkout`, {
         method: 'POST',
         headers: {
@@ -145,30 +135,25 @@ export function SubscriptionPortal() {
         throw new Error(data.error || 'Failed to create checkout session');
       }
 
-      // Redirect to Stripe checkout
       if (data.url) {
         window.location.href = data.url;
       } else {
         throw new Error('No checkout URL received');
       }
-    });
+    }), [accessToken]);
 
   // Handle checkout success/cancel from URL
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const checkout = urlParams.get('checkout');
-    const sessionId = urlParams.get('session_id');
     const message = urlParams.get('message');
     const upgrade = urlParams.get('upgrade');
 
-    // If upgrade flag is present, automatically trigger upgrade flow
     if (upgrade === 'true' && accessToken && !data?.isPremium) {
-      // Clean up URL first
       const newUrl = new URL(window.location.href);
       newUrl.searchParams.delete('upgrade');
       window.history.replaceState({}, '', newUrl.toString());
-      
-      // Trigger upgrade after a short delay to ensure page is loaded
+
       setTimeout(() => {
         handleUpgrade();
       }, 500);
@@ -177,29 +162,24 @@ export function SubscriptionPortal() {
 
     if (checkout === 'success') {
       setError(null);
-      // Show success message
-      const successMsg = '✅ Payment successful! Your subscription is being activated...';
+      const successMsg = 'Payment successful! Your subscription is being activated...';
       setError(successMsg);
-      // Reload subscription data after a delay
       setTimeout(() => {
         if (accessToken) {
           loadData();
         }
       }, 2000);
-      // Clean up URL
       const newUrl = new URL(window.location.href);
       newUrl.searchParams.delete('checkout');
       newUrl.searchParams.delete('session_id');
       window.history.replaceState({}, '', newUrl.toString());
     } else if (checkout === 'cancel') {
       setError('Payment was canceled. No charges were made.');
-      // Clean up URL
       const newUrl = new URL(window.location.href);
       newUrl.searchParams.delete('checkout');
       window.history.replaceState({}, '', newUrl.toString());
     } else if (checkout === 'error' && message) {
       setError(`Error: ${decodeURIComponent(message)}`);
-      // Clean up URL
       const newUrl = new URL(window.location.href);
       newUrl.searchParams.delete('checkout');
       newUrl.searchParams.delete('message');
@@ -246,26 +226,32 @@ export function SubscriptionPortal() {
   const renderSubscriptionView = () => {
     if (isValidating) {
       return (
-        <Card className="text-center py-10">
-          <p className="text-text-secondary">Validating session...</p>
+        <Card className="text-center py-16">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-8 h-8 border-2 border-coral/30 border-t-coral rounded-full animate-spin" />
+            <p className="text-text-secondary">Validating session...</p>
+          </div>
         </Card>
       );
     }
 
     if (!session) {
       return (
-        <Card className="text-center py-10">
-          <h2 className="text-xl font-semibold text-text-primary mb-2">Sign in required</h2>
-          <p className="text-text-secondary mb-4">
-            Please open the EmailBoy extension, sign in, then return to this page. Your session will
-            sync automatically.
-          </p>
-          <Button
-            onClick={() => window.location.reload()}
-            variant="secondary"
-          >
-            Check Again
-          </Button>
+        <Card variant="bordered" className="text-center py-16">
+          <div className="max-w-md mx-auto">
+            <div className="w-16 h-16 rounded-2xl bg-coral/10 flex items-center justify-center mx-auto mb-6">
+              <svg className="w-8 h-8 text-coral" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M13.8 12H3" />
+              </svg>
+            </div>
+            <h2 className="font-display text-xl font-semibold text-text-primary mb-2">Sign in required</h2>
+            <p className="text-text-secondary mb-6">
+              Open the EmailBoy extension, sign in, then return to this page. Your session will sync automatically.
+            </p>
+            <Button variant="secondary" onClick={() => window.location.reload()}>
+              Check Again
+            </Button>
+          </div>
         </Card>
       );
     }
@@ -273,137 +259,234 @@ export function SubscriptionPortal() {
     if (loading) {
       return (
         <div className="space-y-6">
-          <Skeleton className="h-32 w-full rounded-2xl" />
+          <Skeleton className="h-48 w-full" />
           <div className="grid gap-4 md:grid-cols-3">
             <Skeleton className="h-32" />
             <Skeleton className="h-32" />
             <Skeleton className="h-32" />
           </div>
-          <Skeleton className="h-64" />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Skeleton className="h-64" />
+            <Skeleton className="h-64" />
+          </div>
         </div>
       );
     }
 
+    const isSuccess = error?.includes('successful');
+
     return (
       <div className="space-y-6">
         {error && (
-          <div className={`rounded-xl border px-4 py-3 text-sm ${
-            error.startsWith('✅') 
-              ? 'border-green-500/40 bg-green-500/5 text-green-700'
-              : 'border-semantic-danger/40 bg-semantic-danger/5 text-semantic-danger'
+          <div className={`rounded-xl border px-5 py-4 text-sm flex items-center gap-3 ${
+            isSuccess
+              ? 'border-emerald/30 bg-emerald/5 text-emerald'
+              : 'border-red-400/30 bg-red-400/5 text-red-400'
           }`}>
+            {isSuccess ? (
+              <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 8v4M12 16h.01" />
+              </svg>
+            )}
             {error}
           </div>
         )}
 
-        <Card className="flex flex-col gap-4">
-          <div>
-            <p className="text-sm uppercase tracking-wide text-text-secondary">Subscription</p>
-            <div className="mt-2 flex items-center gap-3">
-              <h2 className="text-2xl font-semibold text-text-primary">
-                {data?.subscription?.plan ?? 'Free'}
+        {/* Hero Subscription Card */}
+        <Card variant={data?.isPremium ? 'glow' : 'elevated'} padding="lg" className="relative overflow-hidden">
+          {/* Background decoration */}
+          {data?.isPremium && (
+            <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-radial from-coral/10 to-transparent pointer-events-none" />
+          )}
+
+          <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-3">
+                <p className="text-xs font-medium uppercase tracking-wider text-text-tertiary">
+                  Current Plan
+                </p>
+                <StatusBadge
+                  variant={
+                    subscriptionStatus === 'active' ? 'active' :
+                    subscriptionStatus === 'trialing' ? 'trialing' :
+                    subscriptionStatus === 'free' ? 'free' : 'warning'
+                  }
+                >
+                  {subscriptionStatus}
+                </StatusBadge>
+              </div>
+
+              <h2 className="font-display text-3xl font-bold text-text-primary mb-2">
+                {data?.subscription?.plan ?? 'Free Plan'}
               </h2>
-              <StatusBadge
-                variant={
-                  subscriptionStatus === 'active'
-                    ? 'active'
-                    : subscriptionStatus === 'trialing'
-                      ? 'trialing'
-                      : 'warning'
-                }
-              >
-                {subscriptionStatus}
-              </StatusBadge>
+
+              {data?.subscription?.current_period_end ? (
+                <p className="text-text-secondary">
+                  {data.subscription.cancel_at_period_end ? 'Expires' : 'Renews'} on{' '}
+                  <span className="text-text-primary font-medium">
+                    {new Date(data.subscription.current_period_end).toLocaleDateString(undefined, {
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                  </span>
+                </p>
+              ) : (
+                <p className="text-text-secondary">
+                  Upgrade to unlock email collection and cloud sync
+                </p>
+              )}
             </div>
-            {data?.subscription?.current_period_end && (
-              <p className="mt-2 text-sm text-text-secondary">
-                Renews on{' '}
-                {new Date(data.subscription.current_period_end).toLocaleDateString(undefined, {
-                  month: 'long',
-                  day: 'numeric',
-                  year: 'numeric',
-                })}
-              </p>
-            )}
-          </div>
-          <div className="flex flex-col gap-3">
-            <Button
-              onClick={managePortal}
-              disabled={!data?.isPremium}
-              loading={actionState.portal}
-            >
-              Manage Subscription
-            </Button>
-            {!data?.isPremium && (
-              <Button
-                variant="secondary"
-                onClick={handleUpgrade}
-                loading={actionState.upgrade}
-              >
-                Upgrade to Premium
-              </Button>
-            )}
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              {data?.isPremium && (
+                <Button
+                  variant="secondary"
+                  onClick={managePortal}
+                  loading={actionState.portal}
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
+                    <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
+                  </svg>
+                  Manage
+                </Button>
+              )}
+              {!data?.isPremium && (
+                <Button onClick={handleUpgrade} loading={actionState.upgrade}>
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                  </svg>
+                  Upgrade to Premium
+                </Button>
+              )}
+            </div>
           </div>
         </Card>
 
+        {/* Metrics Grid */}
         <div className="grid gap-4 md:grid-cols-3">
           <MetricCard
             label="Plan"
             value={data?.subscription?.plan ?? 'Free'}
             change={data?.isPremium ? 'Premium active' : 'Upgrade available'}
             trend={data?.isPremium ? 'up' : 'neutral'}
+            icon={
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <path d="M3 10h18" />
+              </svg>
+            }
           />
           <MetricCard
             label="Status"
-            value={data?.subscription?.status ?? 'inactive'}
+            value={data?.subscription?.status ?? 'Inactive'}
             change={
               data?.subscription?.current_period_end
                 ? `Renews ${new Date(data.subscription.current_period_end).toLocaleDateString()}`
                 : 'No renewal scheduled'
             }
             trend="neutral"
+            icon={
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 6v6l4 2" />
+              </svg>
+            }
           />
           <MetricCard
-            label="Real-time Sync"
-            value={data?.isPremium ? 'Enabled' : 'Disabled'}
-            change={data?.isPremium ? '+100 captured emails / day' : 'Available on Premium'}
+            label="Cloud Sync"
+            value={data?.isPremium ? 'Active' : 'Disabled'}
+            change={data?.isPremium ? 'Real-time sync enabled' : 'Available on Premium'}
             trend={data?.isPremium ? 'up' : 'neutral'}
+            icon={
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M18 10a6.001 6.001 0 00-11.476-1.5A4.502 4.502 0 007.5 17h10a4.5 4.5 0 00.5-8.973z" />
+              </svg>
+            }
           />
         </div>
 
+        {/* Info Cards */}
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="text-lg font-semibold text-text-primary">Billing history</h3>
-                <p className="text-sm text-text-secondary">Coming soon</p>
+                <h3 className="font-display text-lg font-semibold text-text-primary">Billing History</h3>
+                <p className="text-sm text-text-tertiary mt-1">View your invoices and payments</p>
               </div>
+              {data?.isPremium && (
+                <Button variant="ghost" size="sm" onClick={managePortal}>
+                  View All
+                </Button>
+              )}
             </div>
-            <div className="rounded-lg border border-dashed border-black/10 py-10 text-center text-sm text-text-secondary">
-              Billing timeline and invoices will appear here.
+            <div className="rounded-lg border border-dashed border-border py-12 text-center">
+              <div className="w-12 h-12 rounded-xl bg-graphite flex items-center justify-center mx-auto mb-4">
+                <svg className="w-6 h-6 text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+              </div>
+              <p className="text-sm text-text-tertiary">
+                {data?.isPremium ? 'Billing history available in portal' : 'No billing history yet'}
+              </p>
             </div>
           </Card>
 
           <Card>
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="text-lg font-semibold text-text-primary">Usage summary</h3>
-                <p className="text-sm text-text-secondary">Updated every 24 hours</p>
+                <h3 className="font-display text-lg font-semibold text-text-primary">Quick Stats</h3>
+                <p className="text-sm text-text-tertiary mt-1">Your email collection metrics</p>
               </div>
             </div>
-            <ul className="space-y-3 text-sm text-text-secondary">
-              <li className="flex items-center justify-between">
-                <span>Total contacts captured</span>
-                <span className="font-semibold text-text-primary">Coming soon</span>
+            <ul className="space-y-4">
+              <li className="flex items-center justify-between py-3 border-b border-border">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-coral/10 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-coral" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="2" y="4" width="20" height="16" rx="2" />
+                      <path d="M22 6l-10 7L2 6" />
+                    </svg>
+                  </div>
+                  <span className="text-sm text-text-secondary">Contacts captured</span>
+                </div>
+                <span className="font-mono text-sm font-medium text-text-primary">
+                  {emails.length > 0 ? emails.length : '—'}
+                </span>
               </li>
-              <li className="flex items-center justify-between">
-                <span>Domains tracked</span>
-                <span className="font-semibold text-text-primary">Coming soon</span>
+              <li className="flex items-center justify-between py-3 border-b border-border">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-azure/10 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-azure" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M2 12h20" />
+                      <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+                    </svg>
+                  </div>
+                  <span className="text-sm text-text-secondary">Domains tracked</span>
+                </div>
+                <span className="font-mono text-sm font-medium text-text-primary">
+                  {emails.length > 0 ? new Set(emails.map(e => e.domain)).size : '—'}
+                </span>
               </li>
-              <li className="flex items-center justify-between">
-                <span>Last sync</span>
-                <span className="font-semibold text-text-primary">
-                  {new Date().toLocaleTimeString()}
+              <li className="flex items-center justify-between py-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-emerald/10 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-emerald" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 12a9 9 0 11-9-9" />
+                      <path d="M21 3v9h-9" />
+                    </svg>
+                  </div>
+                  <span className="text-sm text-text-secondary">Last sync</span>
+                </div>
+                <span className="font-mono text-sm font-medium text-text-primary">
+                  {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </li>
             </ul>
@@ -414,22 +497,23 @@ export function SubscriptionPortal() {
   };
 
   const renderEmailsView = () => {
-    // Calculate stats from emails
+    const isPremium = data?.isPremium ?? false;
     const totalContacts = emails.length;
     const uniqueDomains = new Set(emails.map(e => e.domain)).size;
-    const lastSync = emails.length > 0 
-      ? new Date(emails[0].lastSeen).toLocaleTimeString()
+    const lastSync = emails.length > 0
+      ? new Date(emails[0].lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : 'Never';
 
     if (emailsLoading) {
       return (
         <div className="space-y-6">
-          <Skeleton className="h-32 w-full rounded-2xl" />
-          <div className="grid gap-4 md:grid-cols-2">
+          <Skeleton className="h-32 w-full" />
+          <div className="grid gap-4 md:grid-cols-3">
+            <Skeleton className="h-32" />
             <Skeleton className="h-32" />
             <Skeleton className="h-32" />
           </div>
-          <Skeleton className="h-64" />
+          <Skeleton className="h-96" />
         </div>
       );
     }
@@ -437,86 +521,178 @@ export function SubscriptionPortal() {
     return (
       <div className="space-y-6">
         {emailsError && (
-          <div className="rounded-xl border border-semantic-danger/40 bg-semantic-danger/5 px-4 py-3 text-sm text-semantic-danger">
+          <div className="rounded-xl border border-red-400/30 bg-red-400/5 px-5 py-4 text-sm text-red-400 flex items-center gap-3">
+            <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 8v4M12 16h.01" />
+            </svg>
             {emailsError}
           </div>
         )}
 
-        <Card className="flex flex-col gap-3">
-          <h2 className="text-xl font-semibold text-text-primary">Emails Dashboard</h2>
-          <p className="text-sm text-text-secondary">
-            View all email addresses captured by the EmailBoy extension. Data is synced in real-time from your browsing activity.
-          </p>
-        </Card>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <MetricCard 
-            label="Contacts captured" 
-            value={totalContacts.toLocaleString()} 
-            trend={totalContacts > 0 ? 'up' : 'neutral'}
-            change={totalContacts > 0 ? `${totalContacts} email${totalContacts !== 1 ? 's' : ''} found` : 'No emails captured yet'}
-          />
-          <MetricCard 
-            label="Domains tracked" 
-            value={uniqueDomains.toLocaleString()} 
-            trend={uniqueDomains > 0 ? 'up' : 'neutral'}
-            change={uniqueDomains > 0 ? `${uniqueDomains} unique domain${uniqueDomains !== 1 ? 's' : ''}` : 'No domains found'}
-          />
-        </div>
-
-        <Card>
-          <div className="flex items-center justify-between mb-4">
+        {/* Header Card */}
+        <Card variant="elevated" padding="lg">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <h3 className="text-lg font-semibold text-text-primary">Captured Emails</h3>
-              <p className="text-sm text-text-secondary">Last sync: {lastSync}</p>
+              <h2 className="font-display text-2xl font-bold text-text-primary">Email Collection</h2>
+              <p className="text-text-secondary mt-1">
+                All email addresses captured by your EmailBoy extension
+              </p>
             </div>
-            {emails.length > 0 && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={loadEmails}
-                disabled={emailsLoading}
-              >
+            {emails.length > 0 && isPremium && (
+              <Button variant="secondary" onClick={loadEmails} disabled={emailsLoading}>
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 12a9 9 0 11-9-9" />
+                  <path d="M21 3v9h-9" />
+                </svg>
                 Refresh
               </Button>
             )}
           </div>
+        </Card>
+
+        {/* Metrics */}
+        <div className="grid gap-4 md:grid-cols-3">
+          <MetricCard
+            label="Total Contacts"
+            value={totalContacts.toLocaleString()}
+            trend={totalContacts > 0 ? 'up' : 'neutral'}
+            change={totalContacts > 0 ? `${totalContacts} email${totalContacts !== 1 ? 's' : ''} collected` : 'Start browsing to collect'}
+            icon={
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+              </svg>
+            }
+          />
+          <MetricCard
+            label="Unique Domains"
+            value={uniqueDomains.toLocaleString()}
+            trend={uniqueDomains > 0 ? 'up' : 'neutral'}
+            change={uniqueDomains > 0 ? `${uniqueDomains} source${uniqueDomains !== 1 ? 's' : ''}` : 'No domains yet'}
+            icon={
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M2 12h20" />
+                <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+              </svg>
+            }
+          />
+          <MetricCard
+            label="Last Sync"
+            value={lastSync}
+            trend="neutral"
+            change="Real-time sync active"
+            icon={
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 6v6l4 2" />
+              </svg>
+            }
+          />
+        </div>
+
+        {/* Data Table */}
+        <Card padding="none">
+          <div className="px-6 py-5 border-b border-border">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-display text-lg font-semibold text-text-primary">Captured Emails</h3>
+                <p className="text-sm text-text-tertiary mt-1">
+                  {emails.length > 0
+                    ? `Showing ${emails.length} email${emails.length !== 1 ? 's' : ''}`
+                    : 'No emails captured yet'
+                  }
+                </p>
+              </div>
+            </div>
+          </div>
 
           {emails.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-black/10 py-10 text-center text-sm text-text-secondary">
-              <p className="mb-2">No emails captured yet.</p>
-              <p>Start browsing with the EmailBoy extension to capture email addresses.</p>
+            <div className="px-6 py-16 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-graphite flex items-center justify-center mx-auto mb-6">
+                <svg className="w-8 h-8 text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <rect x="2" y="4" width="20" height="16" rx="2" />
+                  <path d="M22 6l-10 7L2 6" />
+                </svg>
+              </div>
+              <h4 className="font-display text-lg font-semibold text-text-primary mb-2">No emails yet</h4>
+              <p className="text-sm text-text-secondary max-w-md mx-auto">
+                Start browsing the web with the EmailBoy extension active. Email addresses will appear here automatically.
+              </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-black/10 text-left text-text-secondary">
-                    <th className="pb-3 font-medium">Email</th>
-                    <th className="pb-3 font-medium">Domain</th>
-                    <th className="pb-3 font-medium">First Seen</th>
-                    <th className="pb-3 font-medium">Last Seen</th>
-                    <th className="pb-3 font-medium">Sources</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {emails.map((email, index) => (
-                    <tr key={index} className="border-b border-black/5 hover:bg-black/2">
-                      <td className="py-3 font-medium text-text-primary">{email.email}</td>
-                      <td className="py-3 text-text-secondary">{email.domain}</td>
-                      <td className="py-3 text-text-secondary">
-                        {new Date(email.timestamp).toLocaleDateString()}
-                      </td>
-                      <td className="py-3 text-text-secondary">
-                        {new Date(email.lastSeen).toLocaleDateString()}
-                      </td>
-                      <td className="py-3 text-text-secondary">
-                        {email.urls?.length || 1} page{((email.urls?.length || 1) !== 1) ? 's' : ''}
-                      </td>
+            <div className="relative">
+              {/* Upgrade overlay for free users */}
+              {!isPremium && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-surface/60 backdrop-blur-[2px] rounded-b-xl">
+                  <div className="text-center px-6 py-8 max-w-sm">
+                    <div className="w-14 h-14 rounded-2xl bg-coral/10 flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-7 h-7 text-coral" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0110 0v4" />
+                      </svg>
+                    </div>
+                    <h4 className="font-display text-lg font-semibold text-text-primary mb-2">
+                      Upgrade to view emails
+                    </h4>
+                    <p className="text-sm text-text-secondary mb-5">
+                      Your emails are being collected. Upgrade to Premium to reveal them, export data, and unlock full access.
+                    </p>
+                    <Button onClick={handleUpgrade} loading={actionState.upgrade}>
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                      </svg>
+                      Upgrade to Premium
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              <div className="overflow-x-auto">
+                <table className="w-full data-table">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left px-6 py-4">Email</th>
+                      <th className="text-left px-6 py-4">Domain</th>
+                      <th className="text-left px-6 py-4">First Seen</th>
+                      <th className="text-left px-6 py-4">Last Seen</th>
+                      <th className="text-left px-6 py-4">Sources</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {emails.map((email, index) => (
+                      <tr
+                        key={index}
+                        className="border-b border-border/50 hover:bg-white/[0.02] transition-colors"
+                      >
+                        <td className="px-6 py-4">
+                          <span className={`text-text-primary font-medium ${!isPremium ? 'blur-[5px] select-none' : ''}`}>
+                            {email.email}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2 py-1 rounded-md bg-graphite text-text-secondary text-xs ${!isPremium ? 'blur-[5px] select-none' : ''}`}>
+                            {email.domain}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          {new Date(email.timestamp).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4">
+                          {new Date(email.lastSeen).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-text-secondary">
+                            {email.urls?.length || 1} page{((email.urls?.length || 1) !== 1) ? 's' : ''}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </Card>
@@ -527,7 +703,12 @@ export function SubscriptionPortal() {
   return (
     <AuthGuard>
       <DashboardLayout
-        header={<Header title={activeView === 'subscriptions' ? 'Subscription Management' : 'Emails'} />}
+        header={
+          <Header
+            title={activeView === 'subscriptions' ? 'Subscription' : 'Emails'}
+            subtitle={activeView === 'subscriptions' ? 'Manage your plan and billing' : 'View collected email addresses'}
+          />
+        }
         navItems={navItems}
         activeKey={activeView}
         onChangeNav={(key) => setActiveView(key as ViewKey)}
@@ -539,4 +720,3 @@ export function SubscriptionPortal() {
 }
 
 export default SubscriptionPortal;
-
