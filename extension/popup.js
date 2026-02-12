@@ -495,12 +495,6 @@ async function handleSync() {
 }
 
 function handleExport() {
-  if (!isPremium) {
-    showNotification('Upgrade to Premium to export emails', 'error');
-    return;
-  }
-
-  // Redirect to portal emails page for export
   if (!currentSession?.access_token) {
     showNotification('Please sign in first', 'error');
     return;
