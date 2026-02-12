@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EmailBoy</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 380px;
+      min-height: 500px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0D0D0F;
+      color: #FAFAFA;
+    }
+
+    .container {
+      padding: 20px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #FF6B4A, #FF8F6B);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .logo-text {
+      font-weight: 600;
+      font-size: 18px;
+    }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .user-email {
+      font-size: 12px;
+      color: #A0A0A8;
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sign-out-btn {
+      background: none;
+      border: none;
+      color: #A0A0A8;
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+
+    .sign-out-btn:hover {
+      color: #FF6B4A;
+      background: rgba(255,107,74,0.1);
+    }
+
+    /* Status Badge */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .status-badge.premium {
+      background: rgba(74,227,167,0.15);
+      color: #4AE3A7;
+      border: 1px solid rgba(74,227,167,0.3);
+    }
+
+    .status-badge.free {
+      background: rgba(255,107,74,0.15);
+      color: #FF6B4A;
+      border: 1px solid rgba(255,107,74,0.3);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    /* Auth Section */
+    .auth-section {
+      display: none;
+    }
+
+    .auth-section.visible {
+      display: block;
+    }
+
+    .auth-title {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
+    .auth-subtitle {
+      font-size: 13px;
+      color: #A0A0A8;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 12px 14px;
+      background: #1A1A1F;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      color: #FAFAFA;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: #FF6B4A;
+      box-shadow: 0 0 0 3px rgba(255,107,74,0.1);
+    }
+
+    .form-group input::placeholder {
+      color: #6A6A72;
+    }
+
+    .auth-error {
+      background: rgba(255,107,74,0.1);
+      border: 1px solid rgba(255,107,74,0.3);
+      color: #FF6B4A;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 12px;
+      display: none;
+    }
+
+    .auth-error.success {
+      background: rgba(74,227,167,0.1);
+      border-color: rgba(74,227,167,0.3);
+      color: #4AE3A7;
+    }
+
+    .auth-error.visible {
+      display: block;
+    }
+
+    .auth-switch {
+      text-align: center;
+      margin-top: 16px;
+      font-size: 13px;
+      color: #A0A0A8;
+    }
+
+    .auth-switch a {
+      color: #FF6B4A;
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .auth-switch a:hover {
+      text-decoration: underline;
+    }
+
+    /* Buttons */
+    .btn {
+      width: 100%;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #FF6B4A, #FF8F6B);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(255,107,74,0.3);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .btn-secondary {
+      background: #1A1A1F;
+      color: #FAFAFA;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .btn-secondary:hover {
+      background: #242428;
+      border-color: rgba(255,255,255,0.2);
+    }
+
+    .btn-small {
+      padding: 8px 12px;
+      font-size: 12px;
+      width: auto;
+    }
+
+    /* Main Content */
+    .main-content {
+      display: none;
+    }
+
+    .main-content.visible {
+      display: block;
+    }
+
+    /* Premium CTA */
+    .premium-cta {
+      background: linear-gradient(135deg, rgba(255,107,74,0.15), rgba(255,143,107,0.1));
+      border: 1px solid rgba(255,107,74,0.3);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .premium-cta h3 {
+      font-size: 15px;
+      margin-bottom: 6px;
+      color: #FF6B4A;
+    }
+
+    .premium-cta p {
+      font-size: 12px;
+      color: #A0A0A8;
+      margin-bottom: 12px;
+    }
+
+    /* Stats */
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: #1A1A1F;
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px;
+      padding: 14px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: #6A6A72;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 600;
+      font-family: 'SF Mono', Monaco, monospace;
+    }
+
+    /* Actions */
+    .actions {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .actions .btn {
+      flex: 1;
+    }
+
+    /* Email List */
+    .email-list-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .email-list-title {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 10px 12px;
+      background: #1A1A1F;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      color: #FAFAFA;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: rgba(255,255,255,0.2);
+    }
+
+    .email-list {
+      max-height: 200px;
+      overflow-y: auto;
+      border-radius: 8px;
+    }
+
+    .email-item {
+      padding: 10px 12px;
+      background: #1A1A1F;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      transition: background 0.15s;
+    }
+
+    .email-item:first-child {
+      border-radius: 8px 8px 0 0;
+    }
+
+    .email-item:last-child {
+      border-radius: 0 0 8px 8px;
+      border-bottom: none;
+    }
+
+    .email-item:only-child {
+      border-radius: 8px;
+    }
+
+    .email-item:hover {
+      background: #242428;
+    }
+
+    .email-address {
+      font-size: 13px;
+      font-weight: 500;
+      color: #FAFAFA;
+      margin-bottom: 2px;
+    }
+
+    .email-meta {
+      font-size: 11px;
+      color: #6A6A72;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 30px 20px;
+      color: #6A6A72;
+    }
+
+    .empty-state-icon {
+      font-size: 32px;
+      margin-bottom: 12px;
+      opacity: 0.5;
+    }
+
+    .empty-state p {
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    /* Footer */
+    .footer {
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      display: flex;
+      justify-content: center;
+    }
+
+    .footer-link {
+      color: #6A6A72;
+      text-decoration: none;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: color 0.2s;
+    }
+
+    .footer-link:hover {
+      color: #FF6B4A;
+    }
+
+    /* Loading */
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 2px solid rgba(255,107,74,0.2);
+      border-top-color: #FF6B4A;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Notification */
+    .notification {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      right: 20px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s;
+      z-index: 100;
+    }
+
+    .notification.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .notification.success {
+      background: rgba(74,227,167,0.15);
+      border: 1px solid rgba(74,227,167,0.3);
+      color: #4AE3A7;
+    }
+
+    .notification.error {
+      background: rgba(255,107,74,0.15);
+      border: 1px solid rgba(255,107,74,0.3);
+      color: #FF6B4A;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Auth Section -->
+    <div id="authSection" class="auth-section">
+      <div class="header">
+        <div class="logo">
+          <div class="logo-icon">📧</div>
+          <span class="logo-text">EmailBoy</span>
+        </div>
+      </div>
+
+      <h2 class="auth-title">Welcome</h2>
+      <p class="auth-subtitle">Sign in to start collecting emails</p>
+
+      <div id="authError" class="auth-error"></div>
+
+      <div class="form-group">
+        <input type="email" id="authEmail" placeholder="Email address" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <input type="password" id="authPassword" placeholder="Password" autocomplete="current-password">
+      </div>
+
+      <button id="signInBtn" class="btn btn-primary">Sign In</button>
+      <button id="signUpBtn" class="btn btn-primary" style="display: none;">Create Account</button>
+
+      <p class="auth-switch">
+        <span id="authSwitchText">Don't have an account?</span>
+        <a href="#" id="authSwitchLink">Sign up</a>
+      </p>
+    </div>
+
+    <!-- Main Content -->
+    <div id="mainContent" class="main-content">
+      <div class="header">
+        <div class="logo">
+          <div class="logo-icon">📧</div>
+          <span class="logo-text">EmailBoy</span>
+        </div>
+        <div class="user-info">
+          <span id="userEmail" class="user-email"></span>
+          <button id="signOutBtn" class="sign-out-btn" title="Sign out">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Status Badge -->
+      <div style="margin-bottom: 16px;">
+        <span id="premiumBadge" class="status-badge premium" style="display: none;">
+          <span class="status-dot"></span>
+          Premium Active
+        </span>
+        <span id="freeBadge" class="status-badge free" style="display: none;">
+          <span class="status-dot"></span>
+          Free Plan
+        </span>
+      </div>
+
+      <!-- Premium CTA (for free users) -->
+      <div id="premiumCTA" class="premium-cta" style="display: none;">
+        <h3>Upgrade to Premium</h3>
+        <p>Start collecting emails while you browse the web</p>
+        <button id="upgradeBtn" class="btn btn-primary btn-small">Upgrade Now</button>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats">
+        <div class="stat-card">
+          <div class="stat-label">Emails</div>
+          <div class="stat-value" id="totalCount">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Domains</div>
+          <div class="stat-value" id="domainCount">0</div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="actions">
+        <button id="syncBtn" class="btn btn-secondary btn-small">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12a9 9 0 11-9-9M21 3v9h-9"/>
+          </svg>
+          Sync
+        </button>
+        <button id="exportBtn" class="btn btn-secondary btn-small">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+          </svg>
+          Export
+        </button>
+        <button id="portalBtn" class="btn btn-secondary btn-small">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="16" rx="2"/>
+            <path d="M3 10h18"/>
+          </svg>
+          Portal
+        </button>
+      </div>
+
+      <!-- Email List -->
+      <div class="email-list-header">
+        <span class="email-list-title">Recent Emails</span>
+      </div>
+
+      <input type="text" id="searchInput" class="search-input" placeholder="Search emails...">
+
+      <div id="emailList" class="email-list">
+        <div class="loading">
+          <div class="spinner"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

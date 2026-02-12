@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EmailBoy Settings</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0D0D0F;
+      color: #E8E8EA;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      max-width: 480px;
+      width: 100%;
+      padding: 40px;
+      text-align: center;
+    }
+
+    .logo {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #FFFFFF;
+    }
+
+    .subtitle {
+      color: #8A8A8E;
+      font-size: 15px;
+      margin-bottom: 32px;
+    }
+
+    .card {
+      background: #18181B;
+      border: 1px solid #27272A;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+
+    .card h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #FFFFFF;
+    }
+
+    .card p {
+      color: #8A8A8E;
+      font-size: 14px;
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px;
+      background: rgba(255, 107, 74, 0.1);
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+
+    .status.premium {
+      background: rgba(74, 227, 167, 0.1);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #FF6B4A;
+    }
+
+    .status.premium .status-dot {
+      background: #4AE3A7;
+    }
+
+    .status-text {
+      font-size: 14px;
+      font-weight: 500;
+      color: #FF6B4A;
+    }
+
+    .status.premium .status-text {
+      color: #4AE3A7;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      width: 100%;
+      margin-bottom: 8px;
+    }
+
+    .btn-primary {
+      background: #FF6B4A;
+      color: #FFFFFF;
+    }
+
+    .btn-primary:hover {
+      background: #FF8266;
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: #27272A;
+      color: #E8E8EA;
+    }
+
+    .btn-secondary:hover {
+      background: #3F3F46;
+    }
+
+    .btn-danger {
+      background: transparent;
+      color: #EF4444;
+      border: 1px solid #EF4444;
+    }
+
+    .btn-danger:hover {
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .divider {
+      height: 1px;
+      background: #27272A;
+      margin: 16px 0;
+    }
+
+    .message {
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-top: 12px;
+      display: none;
+    }
+
+    .message.success {
+      background: rgba(74, 227, 167, 0.1);
+      color: #4AE3A7;
+      display: block;
+    }
+
+    .message.error {
+      background: rgba(239, 68, 68, 0.1);
+      color: #EF4444;
+      display: block;
+    }
+
+    .footer {
+      margin-top: 24px;
+      color: #52525B;
+      font-size: 12px;
+    }
+
+    .footer a {
+      color: #FF6B4A;
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      text-decoration: underline;
+    }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      padding: 12px;
+      background: #1F1F23;
+      border-radius: 8px;
+    }
+
+    .user-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #FF6B4A 0%, #FF8266 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+      color: white;
+    }
+
+    .user-email {
+      font-size: 14px;
+      color: #E8E8EA;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">📧</div>
+    <h1>EmailBoy</h1>
+    <p class="subtitle">Email extraction settings</p>
+
+    <div class="card">
+      <h2>Account</h2>
+
+      <div id="loadingState">
+        <p>Checking authentication...</p>
+      </div>
+
+      <div id="notSignedIn" class="hidden">
+        <p>You're not signed in. Open the extension popup to sign in.</p>
+        <button class="btn btn-secondary" onclick="window.close()">Close</button>
+      </div>
+
+      <div id="signedIn" class="hidden">
+        <div class="user-info">
+          <div class="user-avatar" id="userAvatar">?</div>
+          <span class="user-email" id="userEmail">Loading...</span>
+        </div>
+
+        <div id="statusContainer" class="status">
+          <div class="status-dot"></div>
+          <span class="status-text" id="statusText">Checking...</span>
+        </div>
+
+        <button id="portalBtn" class="btn btn-primary">
+          Open Subscription Portal
+        </button>
+
+        <div class="divider"></div>
+
+        <button id="clearBtn" class="btn btn-secondary">
+          Clear Local Emails
+        </button>
+
+        <button id="signOutBtn" class="btn btn-danger">
+          Sign Out
+        </button>
+
+        <div id="statusMessage" class="message"></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>Need help? Visit the <a href="#" id="portalLink">subscription portal</a></p>
+    </div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
