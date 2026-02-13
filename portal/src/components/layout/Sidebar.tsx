@@ -45,7 +45,7 @@ export function Sidebar({ items, activeKey, onChange }: SidebarProps) {
           </svg>
         </div>
         <span className="font-display font-semibold text-lg text-text-primary tracking-tight">
-          EmailBoy
+          Email Extractor
         </span>
       </div>
 
@@ -86,7 +86,7 @@ export function Sidebar({ items, activeKey, onChange }: SidebarProps) {
           <span>System Online</span>
         </div>
         <p className="mt-2 text-xs text-text-muted">
-          © {new Date().getFullYear()} EmailBoy
+          © {new Date().getFullYear()} Email Extractor
         </p>
       </div>
     </aside>

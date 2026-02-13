@@ -126,7 +126,7 @@ export function LandingPage() {
                 <path d="M22 6l-10 7L2 6" />
               </svg>
             </div>
-            <span className="text-xl font-bold tracking-tight">EmailBoy</span>
+            <span className="text-xl font-bold tracking-tight">Email Extractor</span>
           </div>
           <nav className="hidden md:flex items-center gap-8">
             <a href="#features" className="text-sm text-text-secondary hover:text-text-primary transition-colors">Features</a>
@@ -200,7 +200,7 @@ export function LandingPage() {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
               </svg>
-              Start Premium
+              Get Started Free
             </button>
           </div>
 
@@ -376,7 +376,7 @@ export function LandingPage() {
               </div>
               <h3 className="text-2xl font-semibold mb-4">Install Extension</h3>
               <p className="text-text-secondary leading-relaxed">
-                Add EmailBoy to Chrome with one click. It's free and takes 10 seconds.
+                Add Email Extractor to Chrome with one click. It's free and takes 10 seconds.
               </p>
               {/* Connector line */}
               <div className="hidden md:block absolute top-10 left-[60%] w-[80%] h-px bg-gradient-to-r from-coral/50 to-transparent" />
@@ -389,7 +389,7 @@ export function LandingPage() {
               </div>
               <h3 className="text-2xl font-semibold mb-4">Browse Normally</h3>
               <p className="text-text-secondary leading-relaxed">
-                Go about your day. EmailBoy quietly captures email addresses in the background.
+                Go about your day. Email Extractor quietly captures email addresses in the background.
               </p>
               {/* Connector line */}
               <div className="hidden md:block absolute top-10 left-[60%] w-[80%] h-px bg-gradient-to-r from-azure/50 to-transparent" />
@@ -523,7 +523,7 @@ export function LandingPage() {
                 onClick={handleStartTrial}
                 className="w-full py-4 rounded-xl bg-coral hover:bg-coral-light text-white font-semibold transition-all hover:shadow-glow"
               >
-                Start Premium
+                Get Started Free
               </button>
             </div>
           </div>
@@ -547,7 +547,7 @@ export function LandingPage() {
                 {'★★★★★'.split('').map((star, i) => <span key={i}>{star}</span>)}
               </div>
               <p className="text-text-secondary leading-relaxed mb-6">
-                "EmailBoy has completely changed how I build my prospect lists. I've captured over 5,000 emails in just 3 months of normal browsing."
+                "Email Extractor has completely changed how I build my prospect lists. I've captured over 5,000 emails in just 3 months of normal browsing."
               </p>
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-coral to-amber flex items-center justify-center text-white font-bold">
@@ -613,16 +613,16 @@ export function LandingPage() {
 
           <div>
             <FAQItem
-              question="Is EmailBoy really free to install?"
+              question="Is Email Extractor really free to install?"
               answer="Yes! The Chrome extension is completely free to install and use. The free version lets you see captured emails in the popup. Premium unlocks automatic capture, cloud sync, CSV export, and the full dashboard."
             />
             <FAQItem
               question="How does the email capture work?"
-              answer="EmailBoy scans the text content of webpages you visit and identifies email addresses using pattern matching. It filters out fake/placeholder emails and stores real ones. All processing happens locally in your browser."
+              answer="Email Extractor scans the text content of webpages you visit and identifies email addresses using pattern matching. It filters out fake/placeholder emails and stores real ones. All processing happens locally in your browser."
             />
             <FAQItem
               question="Is this legal and ethical?"
-              answer="EmailBoy only captures publicly visible email addresses from webpages. It's similar to manually copying emails you see while browsing. You're responsible for using collected emails in compliance with applicable laws like GDPR and CAN-SPAM."
+              answer="Email Extractor only captures publicly visible email addresses from webpages. It's similar to manually copying emails you see while browsing. You're responsible for using collected emails in compliance with applicable laws like GDPR and CAN-SPAM."
             />
             <FAQItem
               question="Can I cancel my Premium subscription?"
@@ -634,7 +634,7 @@ export function LandingPage() {
             />
             <FAQItem
               question="Does it work on all websites?"
-              answer="EmailBoy works on virtually all websites. Some sites with heavy JavaScript may take a moment longer to scan. The extension is designed to be lightweight and won't slow down your browsing."
+              answer="Email Extractor works on virtually all websites. Some sites with heavy JavaScript may take a moment longer to scan. The extension is designed to be lightweight and won't slow down your browsing."
             />
           </div>
         </div>
@@ -663,7 +663,7 @@ export function LandingPage() {
                 <line x1="3.95" y1="6.06" x2="8.54" y2="14" />
                 <line x1="10.88" y1="21.94" x2="15.46" y2="14" />
               </svg>
-              Get EmailBoy Free
+              Get Email Extractor Free
             </button>
           </div>
         </div>
@@ -680,7 +680,7 @@ export function LandingPage() {
                   <path d="M22 6l-10 7L2 6" />
                 </svg>
               </div>
-              <span className="font-bold">EmailBoy</span>
+              <span className="font-bold">Email Extractor</span>
             </div>
             <div className="flex items-center gap-8 text-sm text-text-tertiary">
               <a href="#" className="hover:text-text-primary transition-colors">Privacy</a>
@@ -688,7 +688,7 @@ export function LandingPage() {
               <a href="#" className="hover:text-text-primary transition-colors">Contact</a>
             </div>
             <div className="text-sm text-text-tertiary">
-              © 2024 EmailBoy. All rights reserved.
+              © 2024 Email Extractor. All rights reserved.
             </div>
           </div>
         </div>

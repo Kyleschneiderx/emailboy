@@ -254,7 +254,7 @@ export function SubscriptionPortal() {
             </div>
             <h2 className="font-display text-xl font-semibold text-text-primary mb-2">Sign in required</h2>
             <p className="text-text-secondary mb-6">
-              Open the EmailBoy extension, sign in, then return to this page. Your session will sync automatically.
+              Open the Email Extractor extension, sign in, then return to this page. Your session will sync automatically.
             </p>
             <Button variant="secondary" onClick={() => window.location.reload()}>
               Check Again
@@ -544,7 +544,7 @@ export function SubscriptionPortal() {
             <div>
               <h2 className="font-display text-2xl font-bold text-text-primary">Email Collection</h2>
               <p className="text-text-secondary mt-1">
-                All email addresses captured by your EmailBoy extension
+                All email addresses captured by your Email Extractor extension
               </p>
             </div>
             <div className="flex gap-3">
@@ -662,7 +662,7 @@ export function SubscriptionPortal() {
               </div>
               <h4 className="font-display text-lg font-semibold text-text-primary mb-2">No emails yet</h4>
               <p className="text-sm text-text-secondary max-w-md mx-auto">
-                Start browsing the web with the EmailBoy extension active. Email addresses will appear here automatically.
+                Start browsing the web with the Email Extractor extension active. Email addresses will appear here automatically.
               </p>
             </div>
           ) : (

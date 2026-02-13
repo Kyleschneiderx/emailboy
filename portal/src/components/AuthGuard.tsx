@@ -134,7 +134,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
               {isSignUp ? 'Create Account' : 'Sign In'}
             </h2>
             <p className="text-sm text-text-secondary mt-1">
-              {isSignUp ? 'Create your EmailBoy account' : 'Sign in to your EmailBoy account'}
+              {isSignUp ? 'Create your Email Extractor account' : 'Sign in to your Email Extractor account'}
             </p>
           </div>
 
