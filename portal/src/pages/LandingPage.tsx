@@ -484,7 +484,7 @@ export function LandingPage() {
                 <p className="text-text-secondary">For serious lead generation</p>
               </div>
               <div className="mb-8">
-                <span className="text-5xl font-bold">$9.99</span>
+                <span className="text-5xl font-bold">$29.99</span>
                 <span className="text-text-tertiary">/month</span>
               </div>
               <ul className="space-y-4 mb-8">
@@ -585,7 +585,7 @@ export function LandingPage() {
                 {'★★★★★'.split('').map((star, i) => <span key={i}>{star}</span>)}
               </div>
               <p className="text-text-secondary leading-relaxed mb-6">
-                "Best ROI on any tool I've purchased. $9.99/month to automatically build a contact list? It pays for itself in the first day."
+                "Best ROI on any tool I've purchased. $29.99/month to automatically build a contact list? It pays for itself in the first day."
               </p>
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald to-azure flex items-center justify-center text-white font-bold">
