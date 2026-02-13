@@ -1,4 +1,4 @@
-// EmailBoy Options Page
+// Email Extractor Options Page
 
 const CONFIG = {
   supabaseUrl: 'https://xgllxidtqbkftsbhiinl.supabase.co',
@@ -128,7 +128,7 @@ async function clearEmails() {
 }
 
 async function signOut() {
-  if (!confirm('Sign out of EmailBoy?')) {
+  if (!confirm('Sign out of Email Extractor?')) {
     return;
   }
 

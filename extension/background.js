@@ -1,4 +1,4 @@
-// EmailBoy Background Service Worker
+// Email Extractor Background Service Worker
 
 const CONFIG = {
   supabaseUrl: 'https://xgllxidtqbkftsbhiinl.supabase.co',
@@ -47,11 +47,11 @@ async function refreshToken() {
       const session = result.supabaseSession;
 
       if (!session?.refresh_token) {
-        console.log('[EmailBoy] No refresh token available');
+        console.log('[Email Extractor] No refresh token available');
         return null;
       }
 
-      console.log('[EmailBoy] Refreshing access token...');
+      console.log('[Email Extractor] Refreshing access token...');
 
       const response = await fetch(`${CONFIG.supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
         method: 'POST',
@@ -66,7 +66,7 @@ async function refreshToken() {
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        console.error('[EmailBoy] Token refresh failed:', error);
+        console.error('[Email Extractor] Token refresh failed:', error);
 
         // If refresh token is invalid, clear session
         if (response.status === 400 || response.status === 401) {
@@ -88,11 +88,11 @@ async function refreshToken() {
       };
 
       await chrome.storage.local.set({ supabaseSession: newSession });
-      console.log('[EmailBoy] Token refreshed successfully');
+      console.log('[Email Extractor] Token refreshed successfully');
 
       return newSession;
     } catch (error) {
-      console.error('[EmailBoy] Token refresh error:', error);
+      console.error('[Email Extractor] Token refresh error:', error);
       return null;
     } finally {
       refreshInProgress = null;
@@ -113,7 +113,7 @@ async function getValidSession() {
 
   // Check if token needs refresh
   if (isTokenExpired(session)) {
-    console.log('[EmailBoy] Token expired, refreshing...');
+    console.log('[Email Extractor] Token expired, refreshing...');
     const refreshed = await refreshToken();
     // If refresh succeeded use new session, otherwise return old one
     // and let the caller handle the 401
@@ -128,7 +128,7 @@ async function getValidSession() {
 // ============================================
 
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('EmailBoy installed');
+  console.log('Email Extractor installed');
   chrome.storage.local.set({
     emails: [],
     settings: { autoSync: true },
@@ -234,7 +234,7 @@ async function checkPremiumStatus(forceRefresh = false) {
 
       // If unauthorized, try refreshing token once
       if (response.status === 401) {
-        console.log('[EmailBoy] Unauthorized, attempting token refresh...');
+        console.log('[Email Extractor] Unauthorized, attempting token refresh...');
         const newSession = await refreshToken();
         if (newSession) {
           const retryResponse = await fetch(`${CONFIG.functionsUrl}/check-subscription`, {
@@ -457,7 +457,7 @@ chrome.storage.local.get(['premiumStatus', 'supabaseSession']).then(async (resul
 
   // Check if token needs refresh on startup
   if (result.supabaseSession && isTokenExpired(result.supabaseSession)) {
-    console.log('[EmailBoy] Token expired on startup, refreshing...');
+    console.log('[Email Extractor] Token expired on startup, refreshing...');
     await refreshToken();
   }
 
@@ -469,7 +469,7 @@ chrome.storage.local.get(['premiumStatus', 'supabaseSession']).then(async (resul
 setInterval(async () => {
   const result = await chrome.storage.local.get(['supabaseSession']);
   if (result.supabaseSession && isTokenExpired(result.supabaseSession)) {
-    console.log('[EmailBoy] Periodic token refresh...');
+    console.log('[Email Extractor] Periodic token refresh...');
     await refreshToken();
   }
 }, 30 * 60 * 1000);

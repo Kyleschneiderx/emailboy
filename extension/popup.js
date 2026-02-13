@@ -1,4 +1,4 @@
-// EmailBoy Popup Script - Optimized for fast loading
+// Email Extractor Popup Script - Optimized for fast loading
 
 const CONFIG = {
   supabaseUrl: 'https://xgllxidtqbkftsbhiinl.supabase.co',
@@ -129,7 +129,7 @@ async function verifySessionInBackground(token) {
 
     if (!response.ok) {
       // Token expired — ask background to refresh using the refresh token
-      console.log('[EmailBoy] Token invalid, attempting refresh...');
+      console.log('[Email Extractor] Token invalid, attempting refresh...');
       const refreshResult = await chrome.runtime.sendMessage({ type: 'REFRESH_TOKEN' });
 
       if (refreshResult?.success && refreshResult.session) {

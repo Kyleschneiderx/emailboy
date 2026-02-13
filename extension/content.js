@@ -1,10 +1,10 @@
-// EmailBoy Content Script - Email Extractor
+// Email Extractor Content Script - Email Extractor
 // Implements the same approach as Email Extractor extension
 
 (function() {
   'use strict';
 
-  console.log('%c[EmailBoy] Content script loaded', 'background: #4AE3A7; color: black; padding: 2px 6px;');
+  console.log('%c[Email Extractor] Content script loaded', 'background: #4AE3A7; color: black; padding: 2px 6px;');
 
   // ============================================
   // EMAIL EXTRACTION UTILITIES
@@ -306,17 +306,17 @@
     try {
       chrome.runtime.sendMessage({ type: 'CHECK_PREMIUM' }, function(response) {
         if (chrome.runtime.lastError) {
-          console.log('[EmailBoy] Premium check error:', chrome.runtime.lastError.message);
+          console.log('[Email Extractor] Premium check error:', chrome.runtime.lastError.message);
           callback(isPremiumCached || false);
           return;
         }
         isPremiumCached = response && response.isPremium === true;
         lastPremiumCheck = now;
-        console.log('[EmailBoy] Premium status:', isPremiumCached);
+        console.log('[Email Extractor] Premium status:', isPremiumCached);
         callback(isPremiumCached);
       });
     } catch (e) {
-      console.log('[EmailBoy] Premium check failed:', e);
+      console.log('[Email Extractor] Premium check failed:', e);
       callback(isPremiumCached || false);
     }
   }
@@ -328,7 +328,7 @@
   function sendEmails(newEmails) {
     if (newEmails.length === 0) return;
 
-    console.log('%c[EmailBoy] Found ' + newEmails.length + ' new emails:', 'color: #4AE3A7; font-weight: bold;', newEmails);
+    console.log('%c[Email Extractor] Found ' + newEmails.length + ' new emails:', 'color: #4AE3A7; font-weight: bold;', newEmails);
 
     try {
       chrome.runtime.sendMessage({
@@ -338,13 +338,13 @@
         timestamp: new Date().toISOString()
       }, function(response) {
         if (chrome.runtime.lastError) {
-          console.log('[EmailBoy] Send error:', chrome.runtime.lastError.message);
+          console.log('[Email Extractor] Send error:', chrome.runtime.lastError.message);
         } else {
-          console.log('[EmailBoy] Saved:', response);
+          console.log('[Email Extractor] Saved:', response);
         }
       });
     } catch (e) {
-      console.log('[EmailBoy] Send failed:', e);
+      console.log('[Email Extractor] Send failed:', e);
     }
   }
 
@@ -379,7 +379,7 @@
         sendEmails(newEmails);
       }
 
-      console.log('[EmailBoy] Scan complete. Total:', allEmails.length, '| New:', newEmails.length);
+      console.log('[Email Extractor] Scan complete. Total:', allEmails.length, '| New:', newEmails.length);
 
       // Allow next run after debounce
       setTimeout(function() {
@@ -393,8 +393,8 @@
   // ============================================
 
   function init() {
-    console.log('[EmailBoy] Initializing...');
-    console.log('[EmailBoy] Site detection - Google:', mcUtils.isGoogle, '| Bing:', mcUtils.isBing, '| DuckDuckGo:', mcUtils.isDuckDuckGo, '| Yahoo:', mcUtils.isYahoo);
+    console.log('[Email Extractor] Initializing...');
+    console.log('[Email Extractor] Site detection - Google:', mcUtils.isGoogle, '| Bing:', mcUtils.isBing, '| DuckDuckGo:', mcUtils.isDuckDuckGo, '| Yahoo:', mcUtils.isYahoo);
 
     // Initial run
     reloader();
