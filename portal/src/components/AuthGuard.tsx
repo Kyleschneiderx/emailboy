@@ -11,7 +11,10 @@ interface AuthGuardProps {
 
 export function AuthGuard({ children }: AuthGuardProps) {
   const { session, isValidating } = useSupabaseSession();
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.has('signup');
+  });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
