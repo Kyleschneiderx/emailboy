@@ -656,33 +656,7 @@ export function SubscriptionPortal() {
               </p>
             </div>
           ) : (
-            <div className="relative">
-              {/* Upgrade overlay for free users */}
-              {!isPremium && (
-                <div className="absolute inset-0 z-10 flex items-center justify-center bg-surface/60 backdrop-blur-[2px] rounded-b-xl">
-                  <div className="text-center px-6 py-8 max-w-sm">
-                    <div className="w-14 h-14 rounded-2xl bg-coral/10 flex items-center justify-center mx-auto mb-4">
-                      <svg className="w-7 h-7 text-coral" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                        <path d="M7 11V7a5 5 0 0110 0v4" />
-                      </svg>
-                    </div>
-                    <h4 className="font-display text-lg font-semibold text-text-primary mb-2">
-                      Upgrade to view emails
-                    </h4>
-                    <p className="text-sm text-text-secondary mb-5">
-                      Your emails are being collected. Upgrade to Premium to reveal them, export data, and unlock full access.
-                    </p>
-                    <Button onClick={handleUpgrade} loading={actionState.upgrade}>
-                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-                      </svg>
-                      Upgrade to Premium
-                    </Button>
-                  </div>
-                </div>
-              )}
-
+            <div>
               <div className="overflow-x-auto">
                 <table className="w-full data-table">
                   <thead>
@@ -695,37 +669,66 @@ export function SubscriptionPortal() {
                     </tr>
                   </thead>
                   <tbody>
-                    {emails.map((email, index) => (
-                      <tr
-                        key={index}
-                        className="border-b border-border/50 hover:bg-white/[0.02] transition-colors"
-                      >
-                        <td className="px-6 py-4">
-                          <span className={`text-text-primary font-medium ${!isPremium ? 'blur-[5px] select-none' : ''}`}>
-                            {email.email}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`px-2 py-1 rounded-md bg-graphite text-text-secondary text-xs ${!isPremium ? 'blur-[5px] select-none' : ''}`}>
-                            {email.domain}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          {new Date(email.timestamp).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4">
-                          {new Date(email.lastSeen).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="text-text-secondary">
-                            {email.urls?.length || 1} page{((email.urls?.length || 1) !== 1) ? 's' : ''}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                    {emails.map((email, index) => {
+                      const isBlurred = !isPremium && index >= 10;
+                      return (
+                        <tr
+                          key={index}
+                          className="border-b border-border/50 hover:bg-white/[0.02] transition-colors"
+                        >
+                          <td className="px-6 py-4">
+                            <span className={`text-text-primary font-medium ${isBlurred ? 'blur-[5px] select-none' : ''}`}>
+                              {email.email}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`px-2 py-1 rounded-md bg-graphite text-text-secondary text-xs ${isBlurred ? 'blur-[5px] select-none' : ''}`}>
+                              {email.domain}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            {new Date(email.timestamp).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4">
+                            {new Date(email.lastSeen).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="text-text-secondary">
+                              {email.urls?.length || 1} page{((email.urls?.length || 1) !== 1) ? 's' : ''}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
+
+              {/* Upgrade banner for free users with more than 10 emails */}
+              {!isPremium && emails.length > 10 && (
+                <div className="px-6 py-8 border-t border-border text-center">
+                  <div className="max-w-sm mx-auto">
+                    <div className="w-12 h-12 rounded-xl bg-coral/10 flex items-center justify-center mx-auto mb-3">
+                      <svg className="w-6 h-6 text-coral" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0110 0v4" />
+                      </svg>
+                    </div>
+                    <h4 className="font-display text-base font-semibold text-text-primary mb-1">
+                      {emails.length - 10} more emails hidden
+                    </h4>
+                    <p className="text-sm text-text-secondary mb-4">
+                      Upgrade to Premium to reveal all emails and export to CSV.
+                    </p>
+                    <Button onClick={handleUpgrade} loading={actionState.upgrade} size="sm">
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                      </svg>
+                      Upgrade to Premium
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </Card>

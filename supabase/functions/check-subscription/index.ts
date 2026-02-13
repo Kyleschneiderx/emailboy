@@ -36,9 +36,9 @@ serve(async (req) => {
     if (authError || !user) {
       return new Response(
         JSON.stringify({ error: 'Unauthorized. Please sign in.' }),
-        { 
-          status: 401, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       )
     }
@@ -48,42 +48,49 @@ serve(async (req) => {
       .from('user_subscriptions')
       .select('*')
       .eq('user_id', user.id)
-      .eq('status', 'active')
       .single()
 
     if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+      console.error('Subscription query error:', error)
       throw error
     }
 
-    const isPremium = subscription && 
-                     subscription.status === 'active' && 
+    // Check if subscription is active and not expired
+    const isPremium = subscription &&
+                     subscription.status === 'active' &&
                      new Date(subscription.current_period_end) > new Date()
 
+    console.log('Subscription check for user:', user.id)
+    console.log('- Found subscription:', !!subscription)
+    console.log('- Status:', subscription?.status)
+    console.log('- Period end:', subscription?.current_period_end)
+    console.log('- Is premium:', isPremium)
+
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         isPremium,
         subscription: subscription ? {
           status: subscription.status,
+          plan: subscription.plan || 'premium',
           current_period_end: subscription.current_period_end,
-          plan: subscription.plan
+          cancel_at_period_end: subscription.cancel_at_period_end || false
         } : null
       }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     )
   } catch (error: any) {
     console.error('Subscription check error:', error)
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         isPremium: false,
         error: error.message || 'Failed to check subscription'
       }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     )
   }
 })
-

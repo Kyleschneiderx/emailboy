@@ -3,6 +3,7 @@ import { cn } from '../../lib/cn';
 
 type CardProps = HTMLAttributes<HTMLDivElement> & {
   padding?: 'none' | 'sm' | 'md' | 'lg';
+  variant?: 'default' | 'elevated' | 'bordered' | 'glow';
 };
 
 const paddingMap: Record<NonNullable<CardProps['padding']>, string> = {
@@ -12,11 +13,19 @@ const paddingMap: Record<NonNullable<CardProps['padding']>, string> = {
   lg: 'p-8',
 };
 
-export function Card({ className, padding = 'md', ...props }: CardProps) {
+const variantMap: Record<NonNullable<CardProps['variant']>, string> = {
+  default: 'bg-slate border border-border',
+  elevated: 'bg-graphite border border-border shadow-lg',
+  bordered: 'bg-slate/50 border border-border-hover',
+  glow: 'bg-slate border border-coral/20 shadow-glow-sm',
+};
+
+export function Card({ className, padding = 'md', variant = 'default', ...props }: CardProps) {
   return (
     <div
       className={cn(
-        'rounded-xl bg-white shadow-card border border-black/5',
+        'rounded-xl transition-all duration-200',
+        variantMap[variant],
         paddingMap[padding],
         className,
       )}
@@ -24,4 +33,3 @@ export function Card({ className, padding = 'md', ...props }: CardProps) {
     />
   );
 }
-
