@@ -697,13 +697,17 @@ export function SubscriptionPortal() {
                             </span>
                           </td>
                           <td className="px-6 py-4">
-                            {new Date(email.timestamp).toLocaleDateString()}
+                            <span className={isBlurred ? 'blur-[5px] select-none' : ''}>
+                              {new Date(email.timestamp).toLocaleDateString()}
+                            </span>
                           </td>
                           <td className="px-6 py-4">
-                            {new Date(email.lastSeen).toLocaleDateString()}
+                            <span className={isBlurred ? 'blur-[5px] select-none' : ''}>
+                              {new Date(email.lastSeen).toLocaleDateString()}
+                            </span>
                           </td>
                           <td className="px-6 py-4">
-                            <span className="text-text-secondary">
+                            <span className={`text-text-secondary ${isBlurred ? 'blur-[5px] select-none' : ''}`}>
                               {email.urls?.length || 1} page{((email.urls?.length || 1) !== 1) ? 's' : ''}
                             </span>
                           </td>
