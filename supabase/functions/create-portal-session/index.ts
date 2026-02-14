@@ -5,18 +5,38 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
+const ALLOWED_ORIGINS = [
+  'https://portal.emailextractorextension.com',
+  'https://portal-six-henna.vercel.app',
+]
+
+const ALLOWED_REDIRECT_HOSTS = [
+  'portal.emailextractorextension.com',
+  'portal-six-henna.vercel.app',
+]
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get('Origin') || ''
+  const isAllowed = ALLOWED_ORIGINS.includes(origin) || origin.startsWith('chrome-extension://')
+  return {
+    'Access-Control-Allow-Origin': isAllowed ? origin : ALLOWED_ORIGINS[0],
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  }
 }
 
 // Default portal URL - override with PORTAL_URL env var
 const DEFAULT_PORTAL_URL = 'https://portal.emailextractorextension.com'
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
+  }
+
+  if (req.method !== 'POST') {
+    return new Response('Method not allowed', { status: 405, headers: corsHeaders })
   }
 
   try {
@@ -81,17 +101,23 @@ serve(async (req) => {
       // ignore - optional body
     }
 
-    const returnUrl = body.returnUrl || PORTAL_URL
-
-    console.log('Creating portal session for customer:', subscription.stripe_customer_id)
-    console.log('Return URL:', returnUrl)
+    // Validate returnUrl against allowlist to prevent open redirect
+    let returnUrl = PORTAL_URL
+    if (body.returnUrl) {
+      try {
+        const parsed = new URL(body.returnUrl)
+        if (ALLOWED_REDIRECT_HOSTS.includes(parsed.hostname)) {
+          returnUrl = body.returnUrl
+        }
+      } catch {
+        // Invalid URL, use default
+      }
+    }
 
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: subscription.stripe_customer_id,
       return_url: returnUrl
     })
-
-    console.log('Portal session created:', portalSession.url)
 
     return new Response(
       JSON.stringify({ success: true, url: portalSession.url }),
@@ -100,7 +126,7 @@ serve(async (req) => {
   } catch (error: any) {
     console.error('Create portal session error:', error)
     return new Response(
-      JSON.stringify({ error: error.message || 'Failed to create portal session' }),
+      JSON.stringify({ error: 'Failed to create portal session' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

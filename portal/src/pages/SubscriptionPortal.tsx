@@ -146,7 +146,6 @@ export function SubscriptionPortal() {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const checkout = urlParams.get('checkout');
-    const message = urlParams.get('message');
     const upgrade = urlParams.get('upgrade');
     const view = urlParams.get('view');
 
@@ -186,8 +185,8 @@ export function SubscriptionPortal() {
       const newUrl = new URL(window.location.href);
       newUrl.searchParams.delete('checkout');
       window.history.replaceState({}, '', newUrl.toString());
-    } else if (checkout === 'error' && message) {
-      setError(`Error: ${decodeURIComponent(message)}`);
+    } else if (checkout === 'error') {
+      setError('Something went wrong during checkout. Please try again.');
       const newUrl = new URL(window.location.href);
       newUrl.searchParams.delete('checkout');
       newUrl.searchParams.delete('message');

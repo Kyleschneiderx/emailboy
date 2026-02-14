@@ -423,7 +423,7 @@ function displayEmails(emails) {
   elements.emailList.innerHTML = display.map(item => `
     <div class="email-item">
       <div class="email-address">${escapeHtml(item.email)}</div>
-      <div class="email-meta">${item.domain} · ${formatDate(item.lastSeen || item.timestamp)}</div>
+      <div class="email-meta">${escapeHtml(item.domain)} · ${formatDate(item.lastSeen || item.timestamp)}</div>
     </div>
   `).join('');
 }

@@ -127,13 +127,14 @@ async function getValidSession() {
 // INITIALIZATION
 // ============================================
 
-chrome.runtime.onInstalled.addListener(() => {
-  console.log('Email Extractor installed');
-  chrome.storage.local.set({
-    emails: [],
-    settings: { autoSync: true },
-    premiumStatus: false
-  });
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === 'install') {
+    chrome.storage.local.set({
+      emails: [],
+      settings: { autoSync: true },
+      premiumStatus: false
+    });
+  }
 });
 
 // ============================================
@@ -141,11 +142,24 @@ chrome.runtime.onInstalled.addListener(() => {
 // ============================================
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Validate sender is from this extension
+  if (sender.id !== chrome.runtime.id) {
+    sendResponse({ error: 'Unauthorized sender' });
+    return false;
+  }
   handleMessage(message, sender).then(sendResponse);
   return true;
 });
 
 async function handleMessage(message, sender) {
+  // Content scripts can only send NEW_EMAILS and CHECK_PREMIUM
+  const isContentScript = sender.tab != null;
+  const contentScriptAllowed = ['NEW_EMAILS', 'CHECK_PREMIUM'];
+
+  if (isContentScript && !contentScriptAllowed.includes(message.type)) {
+    return { error: 'Not allowed from content script' };
+  }
+
   switch (message.type) {
     case 'NEW_EMAILS':
       return await handleNewEmails(message.emails, message.url, message.timestamp);

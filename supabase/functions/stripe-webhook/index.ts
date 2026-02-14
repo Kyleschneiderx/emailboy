@@ -16,45 +16,21 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  // Health check endpoint
-  const url = new URL(req.url)
-  if (url.searchParams.get('health') === 'check') {
-    return new Response(
-      JSON.stringify({
-        status: 'ok',
-        message: 'Webhook function is deployed and accessible',
-        timestamp: new Date().toISOString()
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+  if (req.method !== 'POST') {
+    return new Response('Method not allowed', { status: 405, headers: corsHeaders })
   }
-
-  console.log('=== STRIPE WEBHOOK CALLED ===')
-  console.log('Method:', req.method)
 
   try {
     // Get environment variables
     const stripeKey = Deno.env.get('STRIPE_SECRET_KEY')
-    const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET')?.trim() // Trim whitespace!
+    const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET')?.trim()
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
-    console.log('Environment check:')
-    console.log('- STRIPE_SECRET_KEY:', stripeKey ? 'SET' : 'MISSING')
-    console.log('- STRIPE_WEBHOOK_SECRET:', webhookSecret ? `SET (length: ${webhookSecret.length})` : 'MISSING')
-    console.log('- SUPABASE_URL:', supabaseUrl ? 'SET' : 'MISSING')
-    console.log('- SUPABASE_SERVICE_ROLE_KEY:', supabaseServiceKey ? 'SET' : 'MISSING')
-
     if (!stripeKey || !webhookSecret || !supabaseUrl || !supabaseServiceKey) {
-      const missing = []
-      if (!stripeKey) missing.push('STRIPE_SECRET_KEY')
-      if (!webhookSecret) missing.push('STRIPE_WEBHOOK_SECRET')
-      if (!supabaseUrl) missing.push('SUPABASE_URL')
-      if (!supabaseServiceKey) missing.push('SUPABASE_SERVICE_ROLE_KEY')
-
-      console.error('Missing environment variables:', missing.join(', '))
+      console.error('Missing required environment variables')
       return new Response(
-        JSON.stringify({ error: 'Server configuration error', missing }),
+        JSON.stringify({ error: 'Server configuration error' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -63,16 +39,13 @@ serve(async (req) => {
 
     // Get the raw body for signature verification
     const body = await req.text()
-    console.log('Webhook body length:', body.length)
 
     // Get Stripe signature
     const signature = req.headers.get('stripe-signature')
-    console.log('Stripe signature:', signature ? 'FOUND' : 'MISSING')
 
     if (!signature) {
-      console.error('No stripe-signature header')
       return new Response(
-        JSON.stringify({ error: 'Missing stripe-signature header' }),
+        JSON.stringify({ error: 'Missing signature header' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -81,13 +54,10 @@ serve(async (req) => {
     let event: Stripe.Event
     try {
       event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret)
-      console.log('✓ Signature verified')
-      console.log('Event type:', event.type)
-      console.log('Event ID:', event.id)
     } catch (err: any) {
-      console.error('Signature verification failed:', err.message)
+      console.error('Signature verification failed')
       return new Response(
-        JSON.stringify({ error: `Webhook signature verification failed: ${err.message}` }),
+        JSON.stringify({ error: 'Invalid webhook signature' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -98,13 +68,9 @@ serve(async (req) => {
     // Handle events
     switch (event.type) {
       case 'checkout.session.completed': {
-        console.log('Processing checkout.session.completed')
         const session = event.data.object as Stripe.Checkout.Session
 
         const userId = session.client_reference_id || session.metadata?.user_id
-        console.log('User ID:', userId)
-        console.log('Payment status:', session.payment_status)
-        console.log('Subscription ID:', session.subscription)
 
         if (!userId) {
           console.error('No user ID in session')
@@ -112,7 +78,6 @@ serve(async (req) => {
         }
 
         if (session.payment_status !== 'paid') {
-          console.log('Payment not completed yet')
           break
         }
 
@@ -124,7 +89,6 @@ serve(async (req) => {
 
         // Get subscription details from Stripe
         const subscription = await stripe.subscriptions.retrieve(subscriptionId)
-        console.log('Subscription status:', subscription.status)
 
         const subscriptionData = {
           user_id: userId,
@@ -138,23 +102,18 @@ serve(async (req) => {
           updated_at: new Date().toISOString()
         }
 
-        console.log('Upserting subscription:', JSON.stringify(subscriptionData))
-
         const { error } = await supabaseAdmin
           .from('user_subscriptions')
           .upsert(subscriptionData, { onConflict: 'user_id' })
 
         if (error) {
-          console.error('Database error:', error)
-        } else {
-          console.log('✓ Subscription saved successfully')
+          console.error('Database error on checkout:', error)
         }
         break
       }
 
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted': {
-        console.log('Processing', event.type)
         const subscription = event.data.object as Stripe.Subscription
         const customerId = subscription.customer as string
 
@@ -177,18 +136,13 @@ serve(async (req) => {
             .eq('user_id', existing.user_id)
 
           if (error) {
-            console.error('Database error:', error)
-          } else {
-            console.log('✓ Subscription updated')
+            console.error('Database error on subscription update:', error)
           }
-        } else {
-          console.log('No existing subscription found for customer:', customerId)
         }
         break
       }
 
       case 'invoice.payment_succeeded': {
-        console.log('Processing invoice.payment_succeeded')
         const invoice = event.data.object as Stripe.Invoice
         const subscriptionId = invoice.subscription as string
 
@@ -210,14 +164,12 @@ serve(async (req) => {
                 updated_at: new Date().toISOString()
               })
               .eq('user_id', existing.user_id)
-            console.log('✓ Subscription renewed')
           }
         }
         break
       }
 
       case 'invoice.payment_failed': {
-        console.log('Processing invoice.payment_failed')
         const invoice = event.data.object as Stripe.Invoice
         const subscriptionId = invoice.subscription as string
 
@@ -236,7 +188,6 @@ serve(async (req) => {
                 updated_at: new Date().toISOString()
               })
               .eq('user_id', existing.user_id)
-            console.log('✓ Subscription marked as past_due')
           }
         }
         break
@@ -246,18 +197,15 @@ serve(async (req) => {
         console.log('Unhandled event type:', event.type)
     }
 
-    console.log('=== WEBHOOK COMPLETED ===')
     return new Response(
       JSON.stringify({ received: true }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
   } catch (error: any) {
-    console.error('=== WEBHOOK ERROR ===')
-    console.error('Error:', error.message)
-    console.error('Stack:', error.stack)
+    console.error('Webhook error:', error)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

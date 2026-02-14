@@ -5,18 +5,33 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+const ALLOWED_ORIGINS = [
+  'https://portal.emailextractorextension.com',
+  'https://portal-six-henna.vercel.app',
+]
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get('Origin') || ''
+  const isAllowed = ALLOWED_ORIGINS.includes(origin) || origin.startsWith('chrome-extension://')
+  return {
+    'Access-Control-Allow-Origin': isAllowed ? origin : ALLOWED_ORIGINS[0],
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  }
 }
 
 // Default portal URL - override with PORTAL_URL env var
 const DEFAULT_PORTAL_URL = 'https://portal.emailextractorextension.com'
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
+  }
+
+  if (req.method !== 'POST') {
+    return new Response('Method not allowed', { status: 405, headers: corsHeaders })
   }
 
   try {
@@ -24,21 +39,10 @@ serve(async (req) => {
     const priceId = Deno.env.get('STRIPE_PRICE_ID')
     const portalUrl = Deno.env.get('PORTAL_URL') || DEFAULT_PORTAL_URL
 
-    console.log('Environment check:')
-    console.log('- STRIPE_SECRET_KEY:', stripeKey ? 'SET' : 'MISSING')
-    console.log('- STRIPE_PRICE_ID:', priceId ? priceId : 'MISSING')
-    console.log('- PORTAL_URL:', portalUrl)
-
-    if (!stripeKey) {
+    if (!stripeKey || !priceId) {
+      console.error('Missing required environment variables')
       return new Response(
-        JSON.stringify({ error: 'Stripe secret key not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    if (!priceId) {
-      return new Response(
-        JSON.stringify({ error: 'Stripe price ID not configured. Please set STRIPE_PRICE_ID in Edge Function secrets.' }),
+        JSON.stringify({ error: 'Server configuration error' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -49,12 +53,20 @@ serve(async (req) => {
     })
 
     // Create Supabase client with user's auth token
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Missing authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       {
         global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
+          headers: { Authorization: authHeader },
         },
       }
     )
@@ -71,9 +83,6 @@ serve(async (req) => {
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
-
-    console.log('Creating checkout for user:', user.id, 'email:', user.email)
-    console.log('Using price ID:', priceId)
 
     // Check if user already has an active subscription
     const { data: existingSub } = await supabaseClient
@@ -117,9 +126,6 @@ serve(async (req) => {
     // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create(sessionOptions)
 
-    console.log('Checkout session created:', session.id)
-    console.log('Checkout URL:', session.url)
-
     return new Response(
       JSON.stringify({
         sessionId: session.id,
@@ -131,7 +137,7 @@ serve(async (req) => {
     console.error('Create checkout error:', error)
     return new Response(
       JSON.stringify({
-        error: error.message || 'Failed to create checkout session'
+        error: 'Failed to create checkout session'
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )

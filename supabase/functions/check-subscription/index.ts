@@ -4,25 +4,48 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+const ALLOWED_ORIGINS = [
+  'https://portal.emailextractorextension.com',
+  'https://portal-six-henna.vercel.app',
+]
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get('Origin') || ''
+  const isAllowed = ALLOWED_ORIGINS.includes(origin) || origin.startsWith('chrome-extension://')
+  return {
+    'Access-Control-Allow-Origin': isAllowed ? origin : ALLOWED_ORIGINS[0],
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  }
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    return new Response('Method not allowed', { status: 405, headers: corsHeaders })
+  }
+
   try {
     // Create Supabase client with user's auth token
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Missing authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       {
         global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
+          headers: { Authorization: authHeader },
         },
       }
     )
@@ -46,7 +69,7 @@ serve(async (req) => {
     // Check subscription status from database
     const { data: subscription, error } = await supabaseClient
       .from('user_subscriptions')
-      .select('*')
+      .select('status, plan, current_period_end, cancel_at_period_end')
       .eq('user_id', user.id)
       .single()
 
@@ -59,12 +82,6 @@ serve(async (req) => {
     const isPremium = subscription &&
                      subscription.status === 'active' &&
                      new Date(subscription.current_period_end) > new Date()
-
-    console.log('Subscription check for user:', user.id)
-    console.log('- Found subscription:', !!subscription)
-    console.log('- Status:', subscription?.status)
-    console.log('- Period end:', subscription?.current_period_end)
-    console.log('- Is premium:', isPremium)
 
     return new Response(
       JSON.stringify({
@@ -85,7 +102,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         isPremium: false,
-        error: error.message || 'Failed to check subscription'
+        error: 'Failed to check subscription'
       }),
       {
         status: 500,
