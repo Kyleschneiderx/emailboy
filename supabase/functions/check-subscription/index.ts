@@ -2,7 +2,7 @@
 // Checks if user has an active premium subscription
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { validateToken, isValidateError, getServiceClient } from '../_shared/validate-token.ts'
 
 const ALLOWED_ORIGINS = [
   'https://portal.emailextractorextension.com',
@@ -21,7 +21,6 @@ function getCorsHeaders(req: Request) {
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req)
 
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -31,54 +30,29 @@ serve(async (req) => {
   }
 
   try {
-    // Create Supabase client with user's auth token
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
+    const result = await validateToken(req)
+
+    if (isValidateError(result)) {
       return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: result.error }),
+        { status: result.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: authHeader },
-        },
-      }
-    )
+    const supabase = getServiceClient()
 
-    // Verify user is authenticated
-    const {
-      data: { user },
-      error: authError
-    } = await supabaseClient.auth.getUser()
-
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized. Please sign in.' }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      )
-    }
-
-    // Check subscription status from database
-    const { data: subscription, error } = await supabaseClient
+    // Check subscription status
+    const { data: subscription, error } = await supabase
       .from('user_subscriptions')
       .select('status, plan, current_period_end, cancel_at_period_end')
-      .eq('user_id', user.id)
+      .eq('user_id', result.userId)
       .single()
 
-    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+    if (error && error.code !== 'PGRST116') {
       console.error('Subscription query error:', error)
       throw error
     }
 
-    // Check if subscription is active and not expired
     const isPremium = subscription &&
                      subscription.status === 'active' &&
                      new Date(subscription.current_period_end) > new Date()
@@ -93,21 +67,13 @@ serve(async (req) => {
           cancel_at_period_end: subscription.cancel_at_period_end || false
         } : null
       }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error: any) {
     console.error('Subscription check error:', error)
     return new Response(
-      JSON.stringify({
-        isPremium: false,
-        error: 'Failed to check subscription'
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
+      JSON.stringify({ error: 'Failed to check subscription' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })

@@ -7,7 +7,8 @@ const CONFIG = {
   functionsUrl: 'https://xgllxidtqbkftsbhiinl.supabase.co/functions/v1'
 };
 
-let currentSession = null;
+let apiToken = null;
+let currentUser = null;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', init);
@@ -31,19 +32,19 @@ async function checkAuth() {
   const signedIn = document.getElementById('signedIn');
 
   try {
-    const result = await chrome.storage.local.get(['supabaseSession']);
-    const session = result.supabaseSession;
+    const result = await chrome.storage.local.get(['apiToken', 'user']);
 
-    if (!session?.access_token) {
+    if (!result.apiToken) {
       loadingState.classList.add('hidden');
       notSignedIn.classList.remove('hidden');
       return;
     }
 
-    currentSession = session;
+    apiToken = result.apiToken;
+    currentUser = result.user;
 
     // Update UI with user info
-    const email = session.user?.email || 'Unknown';
+    const email = currentUser?.email || 'Unknown';
     document.getElementById('userEmail').textContent = email;
     document.getElementById('userAvatar').textContent = email.charAt(0).toUpperCase();
 
@@ -67,7 +68,7 @@ async function checkPremiumStatus() {
   try {
     const response = await fetch(`${CONFIG.functionsUrl}/check-subscription`, {
       headers: {
-        'Authorization': `Bearer ${currentSession.access_token}`,
+        'Authorization': `Bearer ${apiToken}`,
         'Content-Type': 'application/json'
       }
     });
@@ -92,24 +93,12 @@ async function checkPremiumStatus() {
 }
 
 function openPortal() {
-  if (!currentSession?.access_token) {
+  if (!apiToken) {
     showMessage('Please sign in first', 'error');
     return;
   }
 
-  // Encode session for portal
-  const sessionData = {
-    access_token: currentSession.access_token,
-    refresh_token: currentSession.refresh_token,
-    expires_at: currentSession.expires_at,
-    expires_in: currentSession.expires_in,
-    token_type: currentSession.token_type,
-    user: currentSession.user
-  };
-
-  const encodedSession = btoa(JSON.stringify(sessionData));
-  const portalUrl = `${CONFIG.portalUrl}?session=${encodeURIComponent(encodedSession)}`;
-
+  const portalUrl = `${CONFIG.portalUrl}?token=${encodeURIComponent(apiToken)}`;
   window.open(portalUrl, '_blank');
 }
 
@@ -133,13 +122,12 @@ async function signOut() {
   }
 
   try {
-    // Try to sign out on server
-    if (currentSession?.access_token) {
+    if (apiToken) {
       try {
         await fetch(`${CONFIG.functionsUrl}/auth-signout`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${currentSession.access_token}`,
+            'Authorization': `Bearer ${apiToken}`,
             'Content-Type': 'application/json'
           }
         });
@@ -148,13 +136,15 @@ async function signOut() {
       }
     }
 
-    // Clear local session
-    await chrome.storage.local.remove(['supabaseSession']);
-    currentSession = null;
+    // Clear local data
+    await chrome.storage.local.remove(['apiToken', 'user', 'supabaseSession']);
+    await chrome.storage.local.set({ premiumStatus: false });
+    chrome.runtime.sendMessage({ type: 'TOKEN_UPDATED' });
+    apiToken = null;
+    currentUser = null;
 
     showMessage('Signed out successfully', 'success');
 
-    // Redirect to not signed in state
     setTimeout(() => {
       document.getElementById('signedIn').classList.add('hidden');
       document.getElementById('notSignedIn').classList.remove('hidden');

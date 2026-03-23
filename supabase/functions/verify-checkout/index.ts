@@ -1,9 +1,9 @@
 // Supabase Edge Function: verify-checkout
-// Verifies a Stripe checkout session and returns session details
+// Verifies a Stripe checkout session belongs to the authenticated user
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
+import { validateToken, isValidateError } from '../_shared/validate-token.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,7 +11,6 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -21,64 +20,37 @@ serve(async (req) => {
       apiVersion: '2023-10-16',
     })
 
-    // Create Supabase client with user's auth token
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
-        },
-      }
-    )
+    const result = await validateToken(req)
 
-    // Verify user is authenticated
-    const {
-      data: { user },
-      error: authError
-    } = await supabaseClient.auth.getUser()
-
-    if (authError || !user) {
+    if (isValidateError(result)) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized. Please sign in.' }),
-        { 
-          status: 401, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        JSON.stringify({ error: result.error }),
+        { status: result.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Get session ID from request
     const { sessionId } = await req.json()
 
     if (!sessionId) {
       return new Response(
         JSON.stringify({ error: 'Session ID is required' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Retrieve the checkout session from Stripe
     const session = await stripe.checkout.sessions.retrieve(sessionId)
 
     // Verify the session belongs to this user
     const userId = session.client_reference_id || session.metadata?.user_id
-    if (userId !== user.id) {
+    if (userId !== result.userId) {
       return new Response(
         JSON.stringify({ error: 'Session does not belong to this user' }),
-        { 
-          status: 403, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Return session details
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         success: true,
         session: {
           id: session.id,
@@ -87,21 +59,13 @@ serve(async (req) => {
           subscription: session.subscription
         }
       }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error: any) {
     console.error('Verify checkout error:', error)
     return new Response(
-      JSON.stringify({ 
-        error: error.message || 'Failed to verify checkout session'
-      }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      JSON.stringify({ error: error.message || 'Failed to verify checkout session' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })
-

@@ -2,8 +2,8 @@
 // Creates a Stripe Customer Portal session for subscription management
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
+import { validateToken, isValidateError, getServiceClient } from '../_shared/validate-token.ts'
 
 const ALLOWED_ORIGINS = [
   'https://portal.emailextractorextension.com',
@@ -24,13 +24,11 @@ function getCorsHeaders(req: Request) {
   }
 }
 
-// Default portal URL - override with PORTAL_URL env var
 const DEFAULT_PORTAL_URL = 'https://portal.emailextractorextension.com'
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req)
 
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -40,50 +38,33 @@ serve(async (req) => {
   }
 
   try {
-    const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
-    const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY') ?? ''
     const PORTAL_URL = Deno.env.get('PORTAL_URL') || DEFAULT_PORTAL_URL
 
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY || !STRIPE_SECRET_KEY) {
-      console.error('Missing environment variables')
+    if (!STRIPE_SECRET_KEY) {
       return new Response(
         JSON.stringify({ error: 'Server configuration error' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    const stripe = new Stripe(STRIPE_SECRET_KEY, {
-      apiVersion: '2023-10-16'
-    })
+    const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' })
 
-    // Authenticated Supabase client (anon key) to validate user
-    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: {
-        headers: { Authorization: req.headers.get('Authorization') ?? '' }
-      }
-    })
+    const result = await validateToken(req)
 
-    const {
-      data: { user },
-      error: authError
-    } = await supabaseClient.auth.getUser()
-
-    if (authError || !user) {
+    if (isValidateError(result)) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized. Please sign in.' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: result.error }),
+        { status: result.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Admin client for database access
-    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+    const supabase = getServiceClient()
 
-    const { data: subscription, error: subError } = await supabaseAdmin
+    const { data: subscription, error: subError } = await supabase
       .from('user_subscriptions')
       .select('stripe_customer_id')
-      .eq('user_id', user.id)
+      .eq('user_id', result.userId)
       .single()
 
     if (subError || !subscription?.stripe_customer_id) {
@@ -101,7 +82,7 @@ serve(async (req) => {
       // ignore - optional body
     }
 
-    // Validate returnUrl against allowlist to prevent open redirect
+    // Validate returnUrl against allowlist
     let returnUrl = PORTAL_URL
     if (body.returnUrl) {
       try {

@@ -2,8 +2,8 @@
 // Resumes a canceled subscription
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
+import { validateToken, isValidateError, getServiceClient } from '../_shared/validate-token.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,7 +11,6 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -21,86 +20,56 @@ serve(async (req) => {
       apiVersion: '2023-10-16',
     })
 
-    // Create Supabase client with user's auth token
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
-        },
-      }
-    )
+    const result = await validateToken(req)
 
-    // Verify user is authenticated
-    const {
-      data: { user },
-      error: authError
-    } = await supabaseClient.auth.getUser()
-
-    if (authError || !user) {
+    if (isValidateError(result)) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized. Please sign in.' }),
-        { 
-          status: 401, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        JSON.stringify({ error: result.error }),
+        { status: result.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
+    const supabase = getServiceClient()
+
     // Get user's subscription
-    const { data: subscription, error: subError } = await supabaseClient
+    const { data: subscription, error: subError } = await supabase
       .from('user_subscriptions')
       .select('stripe_subscription_id')
-      .eq('user_id', user.id)
+      .eq('user_id', result.userId)
       .single()
 
-    if (subError || !subscription || !subscription.stripe_subscription_id) {
+    if (subError || !subscription?.stripe_subscription_id) {
       return new Response(
         JSON.stringify({ error: 'No subscription found' }),
-        { 
-          status: 404, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
     // Resume subscription
-    const resumedSubscription = await stripe.subscriptions.update(
+    await stripe.subscriptions.update(
       subscription.stripe_subscription_id,
       { cancel_at_period_end: false }
     )
 
     // Update database
-    await supabaseClient
+    await supabase
       .from('user_subscriptions')
       .update({
         cancel_at_period_end: false,
         status: 'active',
         updated_at: new Date().toISOString()
       })
-      .eq('user_id', user.id)
+      .eq('user_id', result.userId)
 
     return new Response(
-      JSON.stringify({ 
-        success: true,
-        message: 'Subscription resumed successfully'
-      }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      JSON.stringify({ success: true, message: 'Subscription resumed successfully' }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error: any) {
     console.error('Resume subscription error:', error)
     return new Response(
-      JSON.stringify({ 
-        error: error.message || 'Failed to resume subscription'
-      }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      JSON.stringify({ error: error.message || 'Failed to resume subscription' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })
-

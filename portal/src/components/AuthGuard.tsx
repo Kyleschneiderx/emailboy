@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { useSupabaseSession } from '../hooks/useSupabaseSession';
-import { getValidSession } from '../lib/sessionValidation';
 import { supabaseConfig } from '../config/supabase';
 
 interface AuthGuardProps {
@@ -20,13 +19,6 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-
-  useEffect(() => {
-    const checkSession = async () => {
-      await getValidSession();
-    };
-    checkSession();
-  }, []);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,60 +38,30 @@ export function AuthGuard({ children }: AuthGuardProps) {
     setLoading(true);
 
     try {
-      if (isSignUp) {
-        const response = await fetch(`${supabaseConfig.url}/auth/v1/signup`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': supabaseConfig.anonKey,
-          },
-          body: JSON.stringify({ email, password }),
-        });
+      const endpoint = isSignUp ? 'auth-signup' : 'auth-signin';
+      const response = await fetch(`${supabaseConfig.functionsUrl}/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
 
-        const data = await response.json();
+      const data = await response.json();
 
-        if (!response.ok) {
-          throw new Error(data.error_description || data.msg || 'Sign up failed');
-        }
+      if (!response.ok) {
+        throw new Error(data.error || (isSignUp ? 'Sign up failed' : 'Sign in failed'));
+      }
 
-        if (data.access_token) {
-          // Auto-confirmed, save session
-          const session = {
-            access_token: data.access_token,
-            refresh_token: data.refresh_token,
-            expires_at: data.expires_at,
-            user: data.user,
-          };
-          localStorage.setItem('supabaseSession', JSON.stringify(session));
-          window.location.reload();
-        } else {
-          setSuccess('Account created! Check your email to verify, then sign in.');
-          setIsSignUp(false);
-        }
-      } else {
-        const response = await fetch(`${supabaseConfig.url}/auth/v1/token?grant_type=password`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': supabaseConfig.anonKey,
-          },
-          body: JSON.stringify({ email, password }),
-        });
+      if (data.requiresEmailConfirmation) {
+        setSuccess('Account created! Check your email to verify, then sign in.');
+        setIsSignUp(false);
+        return;
+      }
 
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error_description || data.msg || 'Sign in failed');
-        }
-
-        const session = {
-          access_token: data.access_token,
-          refresh_token: data.refresh_token,
-          expires_at: data.expires_at,
-          user: data.user,
-        };
-        localStorage.setItem('supabaseSession', JSON.stringify(session));
+      if (data.apiToken) {
+        localStorage.setItem('apiToken', data.apiToken);
         window.location.reload();
+      } else {
+        throw new Error('No API token received');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Authentication failed');

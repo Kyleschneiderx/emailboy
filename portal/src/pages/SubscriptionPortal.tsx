@@ -10,7 +10,7 @@ import { Skeleton } from '../components/ui/Skeleton';
 import { subscriptionApi, type SubscriptionData, type EmailData } from '../api/subscription';
 import { useSupabaseSession } from '../hooks/useSupabaseSession';
 import { AuthGuard } from '../components/AuthGuard';
-import { getValidSession } from '../lib/sessionValidation';
+import { getApiToken } from '../lib/sessionValidation';
 import { supabaseConfig } from '../config/supabase';
 
 type Action = 'portal' | 'upgrade';
@@ -23,7 +23,7 @@ const navItems: NavItem[] = [
 type ViewKey = (typeof navItems)[number]['key'];
 
 export function SubscriptionPortal() {
-  const { session, isValidating } = useSupabaseSession();
+  const { session, token, isValidating } = useSupabaseSession();
   const [data, setData] = useState<SubscriptionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +38,7 @@ export function SubscriptionPortal() {
   const [emailsLoading, setEmailsLoading] = useState(false);
   const [emailsError, setEmailsError] = useState<string | null>(null);
 
-  const accessToken = session?.access_token;
+  const accessToken = token;
 
   const loadData = useCallback(async () => {
     if (!accessToken) {
@@ -46,9 +46,9 @@ export function SubscriptionPortal() {
       return;
     }
 
-    const validSession = await getValidSession(true);
-    if (!validSession || !validSession.access_token) {
-      console.log('[LoadData] No valid session found');
+    const currentToken = getApiToken();
+    if (!currentToken) {
+      console.log('[LoadData] No token found');
       setError('Session not found. Please sign in again.');
       setLoading(false);
       return;
@@ -57,15 +57,12 @@ export function SubscriptionPortal() {
     setLoading(true);
     setError(null);
     try {
-      const response = await subscriptionApi.fetchSubscription(validSession.access_token);
+      const response = await subscriptionApi.fetchSubscription(currentToken);
       setData(response);
     } catch (err) {
       console.error('[LoadData] Error fetching subscription:', err);
       if (err instanceof Error && (err.message.includes('Unauthorized') || err.message.includes('Session expired'))) {
         setError('Session expired. Please sign in again.');
-        if (typeof Storage !== 'undefined') {
-          localStorage.removeItem('supabaseSession');
-        }
       } else {
         setError(err instanceof Error ? err.message : 'Failed to load subscription.');
       }
@@ -80,8 +77,8 @@ export function SubscriptionPortal() {
       return;
     }
 
-    const validSession = await getValidSession(true);
-    if (!validSession || !validSession.access_token) {
+    const currentToken = getApiToken();
+    if (!currentToken) {
       setEmailsError('Session not found. Please sign in again.');
       setEmailsLoading(false);
       return;
@@ -90,7 +87,7 @@ export function SubscriptionPortal() {
     setEmailsLoading(true);
     setEmailsError(null);
     try {
-      const response = await subscriptionApi.fetchEmails(validSession.access_token, 1000, 0);
+      const response = await subscriptionApi.fetchEmails(currentToken, 1000, 0);
       setEmails(response.emails || []);
     } catch (err) {
       console.error('[LoadEmails] Error fetching emails:', err);
@@ -115,15 +112,11 @@ export function SubscriptionPortal() {
   const handleUpgrade = useCallback(() =>
     handleAction('upgrade', async () => {
       if (!accessToken) return;
-      const validSession = await getValidSession(true);
-      if (!validSession || !validSession.access_token) {
-        throw new Error('Session not found. Please sign in again.');
-      }
 
       const response = await fetch(`${supabaseConfig.functionsUrl}/create-checkout`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${validSession.access_token}`,
+          'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({}),

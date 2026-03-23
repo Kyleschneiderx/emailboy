@@ -1,6 +1,5 @@
 import { supabaseConfig } from '../config/supabase';
-import { refreshSessionIfNeeded } from '../lib/sessionValidation';
-import { getStoredSession } from '../lib/supabaseClient';
+import { clearApiToken } from '../lib/sessionValidation';
 
 const functionsUrl = supabaseConfig.functionsUrl;
 
@@ -13,7 +12,7 @@ async function request<T>(path: string, token: string, options?: RequestInit) {
     throw new Error('Authentication token is required.');
   }
 
-  let response = await fetch(`${functionsUrl}/${path}`, {
+  const response = await fetch(`${functionsUrl}/${path}`, {
     ...options,
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -22,30 +21,12 @@ async function request<T>(path: string, token: string, options?: RequestInit) {
     },
   });
 
-  // On auth failure, try to refresh the token and retry once
-  if (response.status === 401 || response.status === 403) {
-    const currentSession = getStoredSession();
-    const refreshed = await refreshSessionIfNeeded(currentSession, true);
-    if (refreshed) {
-      response = await fetch(`${functionsUrl}/${path}`, {
-        ...options,
-        headers: {
-          'Authorization': `Bearer ${refreshed.access_token}`,
-          'Content-Type': 'application/json',
-          ...(options?.headers || {}),
-        },
-      });
-    }
-  }
-
   const data = await response.json();
 
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) {
-      // Refresh already failed above — clear session as last resort
-      if (typeof Storage !== 'undefined') {
-        localStorage.removeItem('supabaseSession');
-      }
+      // Token is invalid — clear it and prompt re-login
+      clearApiToken();
       throw new Error('Session expired. Please sign in again.');
     }
     throw new Error(data.error || 'Request failed');
@@ -101,4 +82,3 @@ export const subscriptionApi = {
       { method: 'GET' }
     ),
 };
-

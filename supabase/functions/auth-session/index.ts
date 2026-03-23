@@ -1,8 +1,8 @@
 // Supabase Edge Function: auth-session
-// Validates and returns current user session
+// Validates API token and returns current user info
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { validateToken, isValidateError } from '../_shared/validate-token.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,80 +10,35 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    // Get auth token from header
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
+    const result = await validateToken(req)
+
+    if (isValidateError(result)) {
       return new Response(
-        JSON.stringify({ 
-          authenticated: false,
-          error: 'No authorization token provided' 
-        }),
-        { 
-          status: 401, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
-    }
-
-    // Create Supabase client with user's token
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: authHeader },
-        },
-      }
-    )
-
-    // Get user from token
-    const { data: { user }, error } = await supabaseClient.auth.getUser()
-
-    if (error || !user) {
-      return new Response(
-        JSON.stringify({ 
-          authenticated: false,
-          error: 'Invalid or expired token' 
-        }),
-        { 
-          status: 401, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        JSON.stringify({ authenticated: false, error: result.error }),
+        { status: result.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         authenticated: true,
         user: {
-          id: user.id,
-          email: user.email,
-          created_at: user.created_at
+          id: result.userId,
+          email: result.email,
         }
       }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error: any) {
     console.error('Session validation error:', error)
     return new Response(
-      JSON.stringify({ 
-        authenticated: false,
-        error: error.message || 'Failed to validate session',
-        details: error.toString()
-      }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      JSON.stringify({ authenticated: false, error: error.message || 'Failed to validate session' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })
-

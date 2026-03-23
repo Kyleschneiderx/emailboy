@@ -16,111 +16,13 @@ let premiumCache = {
 };
 const PREMIUM_CACHE_TTL = 60000;
 
-// Token refresh state
-let refreshInProgress = null;
-
 // ============================================
-// TOKEN REFRESH LOGIC
+// TOKEN HELPERS
 // ============================================
 
-// Check if token is expired or about to expire (within 30 minutes)
-function isTokenExpired(session) {
-  if (!session?.expires_at) return true;
-
-  const expiresAt = session.expires_at * 1000; // Convert to milliseconds
-  const now = Date.now();
-  const bufferTime = 30 * 60 * 1000; // 30 minutes buffer — refresh well before expiry
-
-  return now >= (expiresAt - bufferTime);
-}
-
-// Refresh the access token using refresh_token
-async function refreshToken() {
-  // If refresh already in progress, wait for it
-  if (refreshInProgress) {
-    return refreshInProgress;
-  }
-
-  refreshInProgress = (async () => {
-    try {
-      const result = await chrome.storage.local.get(['supabaseSession']);
-      const session = result.supabaseSession;
-
-      if (!session?.refresh_token) {
-        console.log('[Email Extractor] No refresh token available');
-        return null;
-      }
-
-      console.log('[Email Extractor] Refreshing access token...');
-
-      const response = await fetch(`${CONFIG.supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': CONFIG.supabaseKey
-        },
-        body: JSON.stringify({
-          refresh_token: session.refresh_token
-        })
-      });
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        console.error('[Email Extractor] Token refresh failed:', error);
-
-        // If refresh token is invalid, clear session
-        if (response.status === 400 || response.status === 401) {
-          await chrome.storage.local.remove(['supabaseSession']);
-          await chrome.storage.local.set({ premiumStatus: false });
-          premiumCache = { isPremium: false, lastChecked: 0, checkInProgress: null };
-        }
-        return null;
-      }
-
-      const data = await response.json();
-
-      // Save new session
-      const newSession = {
-        access_token: data.access_token,
-        refresh_token: data.refresh_token,
-        expires_at: data.expires_at,
-        user: data.user || session.user
-      };
-
-      await chrome.storage.local.set({ supabaseSession: newSession });
-      console.log('[Email Extractor] Token refreshed successfully');
-
-      return newSession;
-    } catch (error) {
-      console.error('[Email Extractor] Token refresh error:', error);
-      return null;
-    } finally {
-      refreshInProgress = null;
-    }
-  })();
-
-  return refreshInProgress;
-}
-
-// Get valid session — always refreshes if expired, never clears on its own
-async function getValidSession() {
-  const result = await chrome.storage.local.get(['supabaseSession']);
-  let session = result.supabaseSession;
-
-  if (!session?.access_token) {
-    return null;
-  }
-
-  // Check if token needs refresh
-  if (isTokenExpired(session)) {
-    console.log('[Email Extractor] Token expired, refreshing...');
-    const refreshed = await refreshToken();
-    // If refresh succeeded use new session, otherwise return old one
-    // and let the caller handle the 401
-    session = refreshed || session;
-  }
-
-  return session;
+async function getApiToken() {
+  const result = await chrome.storage.local.get(['apiToken']);
+  return result.apiToken || null;
 }
 
 // ============================================
@@ -173,23 +75,24 @@ async function handleMessage(message, sender) {
       chrome.action.setBadgeText({ text: '' });
       return { success: true };
 
-    case 'SESSION_UPDATED':
-      premiumCache = { isPremium: false, lastChecked: 0, checkInProgress: null };
-      checkPremiumStatus(true);
-      return { success: true };
+    case 'TOKEN_UPDATED':
+      // Token was set/cleared — refresh premium status
+      premiumCache = { isPremium: premiumCache.isPremium, lastChecked: 0, checkInProgress: null };
+      const updatedStatus = await checkPremiumStatus(true);
+      return { success: true, isPremium: updatedStatus };
 
     case 'CHECK_PREMIUM':
       const now = Date.now();
       const isStale = now - premiumCache.lastChecked >= PREMIUM_CACHE_TTL;
 
-      if (premiumCache.lastChecked > 0 || premiumCache.isPremium) {
+      if (premiumCache.isPremium && premiumCache.lastChecked > 0) {
         if (isStale) {
           checkPremiumStatus().catch(() => {});
         }
         return { isPremium: premiumCache.isPremium };
       }
 
-      const isPremium = await checkPremiumStatus();
+      const isPremium = await checkPremiumStatus(isStale);
       return { isPremium };
 
     case 'SYNC_NOW':
@@ -198,10 +101,6 @@ async function handleMessage(message, sender) {
     case 'REFRESH_PREMIUM':
       const freshStatus = await checkPremiumStatus(true);
       return { isPremium: freshStatus };
-
-    case 'REFRESH_TOKEN':
-      const newSession = await refreshToken();
-      return { success: !!newSession, session: newSession };
 
     default:
       return { error: 'Unknown message type' };
@@ -229,10 +128,9 @@ async function checkPremiumStatus(forceRefresh = false) {
 
   premiumCache.checkInProgress = (async () => {
     try {
-      // Get valid session (refreshes token if needed)
-      const session = await getValidSession();
+      const token = await getApiToken();
 
-      if (!session?.access_token) {
+      if (!token) {
         premiumCache.isPremium = false;
         premiumCache.lastChecked = now;
         await chrome.storage.local.set({ premiumStatus: false });
@@ -241,37 +139,13 @@ async function checkPremiumStatus(forceRefresh = false) {
 
       const response = await fetch(`${CONFIG.functionsUrl}/check-subscription`, {
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
 
-      // If unauthorized, try refreshing token once
-      if (response.status === 401) {
-        console.log('[Email Extractor] Unauthorized, attempting token refresh...');
-        const newSession = await refreshToken();
-        if (newSession) {
-          const retryResponse = await fetch(`${CONFIG.functionsUrl}/check-subscription`, {
-            headers: {
-              'Authorization': `Bearer ${newSession.access_token}`,
-              'Content-Type': 'application/json'
-            }
-          });
-          if (retryResponse.ok) {
-            const data = await retryResponse.json();
-            premiumCache.isPremium = data.isPremium === true;
-            premiumCache.lastChecked = now;
-            await chrome.storage.local.set({ premiumStatus: premiumCache.isPremium });
-            return premiumCache.isPremium;
-          }
-        }
-        // Refresh failed, user needs to re-login
-        premiumCache.isPremium = false;
-        premiumCache.lastChecked = now;
-        return false;
-      }
-
       if (!response.ok) {
+        // Keep current cached value on errors
         premiumCache.lastChecked = now;
         return premiumCache.isPremium;
       }
@@ -356,10 +230,9 @@ async function syncToSupabase() {
     const result = await chrome.storage.local.get(['emails']);
     const emails = result.emails || [];
 
-    // Get valid session (refreshes if needed)
-    const session = await getValidSession();
+    const token = await getApiToken();
 
-    if (!session?.access_token) {
+    if (!token) {
       return { success: false, reason: 'not_authenticated' };
     }
 
@@ -371,34 +244,10 @@ async function syncToSupabase() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`
+        'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({ emails })
     });
-
-    // If unauthorized, try refresh and retry
-    if (response.status === 401) {
-      const newSession = await refreshToken();
-      if (newSession) {
-        const retryResponse = await fetch(`${CONFIG.functionsUrl}/store-emails`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${newSession.access_token}`
-          },
-          body: JSON.stringify({ emails })
-        });
-        if (retryResponse.ok) {
-          const data = await retryResponse.json();
-          if (data.success) {
-            console.log(`Synced ${data.count} emails to Supabase`);
-            showSyncSuccess();
-            return { success: true, count: data.count };
-          }
-        }
-      }
-      throw new Error('Authentication failed');
-    }
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: response.statusText }));
@@ -462,48 +311,22 @@ chrome.webNavigation?.onCommitted?.addListener(async (details) => {
 // STARTUP & PERIODIC TASKS
 // ============================================
 
-// Initialize on startup
-chrome.storage.local.get(['premiumStatus', 'supabaseSession']).then(async (result) => {
+// Initialize on startup — load cached premium status
+chrome.storage.local.get(['premiumStatus']).then(async (result) => {
   if (result.premiumStatus !== undefined) {
     premiumCache.isPremium = result.premiumStatus;
     premiumCache.lastChecked = Date.now() - PREMIUM_CACHE_TTL + 5000;
-  }
-
-  // Check if token needs refresh on startup
-  if (result.supabaseSession && isTokenExpired(result.supabaseSession)) {
-    console.log('[Email Extractor] Token expired on startup, refreshing...');
-    await refreshToken();
   }
 
   // Refresh premium status after startup
   setTimeout(() => checkPremiumStatus(true).catch(() => {}), 2000);
 });
 
-// Periodically check and refresh token (every 30 minutes)
-setInterval(async () => {
-  const result = await chrome.storage.local.get(['supabaseSession']);
-  if (result.supabaseSession && isTokenExpired(result.supabaseSession)) {
-    console.log('[Email Extractor] Periodic token refresh...');
-    await refreshToken();
-  }
-}, 30 * 60 * 1000);
-
 // Periodically refresh premium status (every 5 minutes)
-setInterval(() => {
-  checkPremiumStatus(true).catch(() => {});
-}, 5 * 60 * 1000);
-
-// Listen for when Chrome starts (alarm-based for MV3)
-chrome.alarms?.create('tokenRefresh', { periodInMinutes: 30 });
 chrome.alarms?.create('premiumCheck', { periodInMinutes: 5 });
 
 chrome.alarms?.onAlarm?.addListener(async (alarm) => {
-  if (alarm.name === 'tokenRefresh') {
-    const result = await chrome.storage.local.get(['supabaseSession']);
-    if (result.supabaseSession && isTokenExpired(result.supabaseSession)) {
-      await refreshToken();
-    }
-  } else if (alarm.name === 'premiumCheck') {
+  if (alarm.name === 'premiumCheck') {
     checkPremiumStatus(true).catch(() => {});
   }
 });

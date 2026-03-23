@@ -2,20 +2,23 @@ import { useEffect, useState } from 'react';
 import './index.css';
 import SubscriptionPortal from './pages/SubscriptionPortal';
 import LandingPage from './pages/LandingPage';
-import { readSessionFromUrl } from './lib/supabaseClient';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import { readTokenFromUrl } from './lib/supabaseClient';
 
 function App() {
   const [hasSession, setHasSession] = useState<boolean | null>(null);
   const [isLandingPage, setIsLandingPage] = useState(false);
 
   useEffect(() => {
-    // Check if we're on the landing page route
     const path = window.location.pathname;
     const searchParams = new URLSearchParams(window.location.search);
 
-    // Show landing page if:
-    // 1. Path is /landing or /home
-    // 2. No session and no session param in URL
+    if (path === '/privacy') {
+      setIsLandingPage(false);
+      setHasSession(false);
+      return;
+    }
+
     const isLandingRoute = path === '/landing' || path === '/home';
 
     if (isLandingRoute) {
@@ -24,36 +27,31 @@ function App() {
       return;
     }
 
-    // Try to read session from URL (when opened from extension)
-    console.log('[App] Reading session from URL on mount...');
-    const session = readSessionFromUrl();
+    // Try to read token from URL (when opened from extension)
+    const urlToken = readTokenFromUrl();
 
-    if (session) {
-      console.log('[App] Successfully read session from URL');
+    if (urlToken) {
       setHasSession(true);
       setIsLandingPage(false);
       return;
     }
 
-    // Check localStorage
-    const stored = localStorage.getItem('supabaseSession');
-    if (stored) {
-      try {
-        const parsedSession = JSON.parse(stored);
-        if (parsedSession?.access_token) {
-          console.log('[App] Found session in localStorage');
-          setHasSession(true);
-          setIsLandingPage(false);
-          return;
-        }
-      } catch (e) {
-        console.log('[App] Failed to parse stored session');
-      }
+    // Check localStorage for API token
+    const storedToken = localStorage.getItem('apiToken');
+    if (storedToken) {
+      setHasSession(true);
+      setIsLandingPage(false);
+      return;
     }
 
-    // Check if session param exists in URL (even if parsing failed)
-    if (searchParams.has('session')) {
-      // Session param exists, show dashboard (will show sign-in prompt if invalid)
+    // Check for legacy supabaseSession — clean it up
+    const legacySession = localStorage.getItem('supabaseSession');
+    if (legacySession) {
+      localStorage.removeItem('supabaseSession');
+    }
+
+    // Check if token param exists in URL (even if parsing failed)
+    if (searchParams.has('token')) {
       setHasSession(false);
       setIsLandingPage(false);
       return;
@@ -66,13 +64,11 @@ function App() {
       return;
     }
 
-    // No session found and no relevant params - show landing page
-    console.log('[App] No session found, showing landing page');
+    // No session found — show landing page
     setHasSession(false);
     setIsLandingPage(true);
   }, []);
 
-  // Show loading state while checking
   if (hasSession === null) {
     return (
       <div className="min-h-screen bg-void flex items-center justify-center">
@@ -81,7 +77,10 @@ function App() {
     );
   }
 
-  // Show landing page or dashboard based on state
+  if (window.location.pathname === '/privacy') {
+    return <PrivacyPolicy />;
+  }
+
   if (isLandingPage) {
     return <LandingPage />;
   }

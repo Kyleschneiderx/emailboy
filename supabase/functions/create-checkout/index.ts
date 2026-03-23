@@ -2,8 +2,8 @@
 // Creates a Stripe checkout session for premium subscription
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
+import { validateToken, isValidateError, getServiceClient } from '../_shared/validate-token.ts'
 
 const ALLOWED_ORIGINS = [
   'https://portal.emailextractorextension.com',
@@ -19,13 +19,11 @@ function getCorsHeaders(req: Request) {
   }
 }
 
-// Default portal URL - override with PORTAL_URL env var
 const DEFAULT_PORTAL_URL = 'https://portal.emailextractorextension.com'
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req)
 
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -47,48 +45,24 @@ serve(async (req) => {
       )
     }
 
-    // Initialize Stripe
-    const stripe = new Stripe(stripeKey, {
-      apiVersion: '2023-10-16',
-    })
+    const stripe = new Stripe(stripeKey, { apiVersion: '2023-10-16' })
 
-    // Create Supabase client with user's auth token
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
+    const result = await validateToken(req)
+
+    if (isValidateError(result)) {
       return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: result.error }),
+        { status: result.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: authHeader },
-        },
-      }
-    )
-
-    // Verify user is authenticated
-    const {
-      data: { user },
-      error: authError
-    } = await supabaseClient.auth.getUser()
-
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized. Please sign in.' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
+    const supabase = getServiceClient()
 
     // Check if user already has an active subscription
-    const { data: existingSub } = await supabaseClient
+    const { data: existingSub } = await supabase
       .from('user_subscriptions')
       .select('status, stripe_customer_id')
-      .eq('user_id', user.id)
+      .eq('user_id', result.userId)
       .single()
 
     if (existingSub?.status === 'active') {
@@ -98,47 +72,33 @@ serve(async (req) => {
       )
     }
 
-    // Create checkout session options
+    // Create checkout session
     const sessionOptions: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ['card'],
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
+      line_items: [{ price: priceId, quantity: 1 }],
       mode: 'subscription',
       success_url: `${portalUrl}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${portalUrl}?checkout=cancel`,
-      metadata: {
-        user_id: user.id,
-      },
-      client_reference_id: user.id,
+      metadata: { user_id: result.userId },
+      client_reference_id: result.userId,
     }
 
-    // If user has existing customer ID, use it
     if (existingSub?.stripe_customer_id) {
       sessionOptions.customer = existingSub.stripe_customer_id
     } else {
-      sessionOptions.customer_email = user.email
+      sessionOptions.customer_email = result.email
     }
 
-    // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create(sessionOptions)
 
     return new Response(
-      JSON.stringify({
-        sessionId: session.id,
-        url: session.url
-      }),
+      JSON.stringify({ sessionId: session.id, url: session.url }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error: any) {
     console.error('Create checkout error:', error)
     return new Response(
-      JSON.stringify({
-        error: 'Failed to create checkout session'
-      }),
+      JSON.stringify({ error: 'Failed to create checkout session' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

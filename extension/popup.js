@@ -10,7 +10,7 @@ CONFIG.functionsUrl = `${CONFIG.supabaseUrl}/functions/v1`;
 
 // State
 let currentUser = null;
-let currentSession = null;
+let apiToken = null;
 let allEmails = [];
 let isPremium = false;
 let isSignUpMode = false;
@@ -61,7 +61,6 @@ function setupEventListeners() {
   elements.upgradeBtn?.addEventListener('click', handleUpgrade);
   elements.searchInput.addEventListener('input', handleSearch);
 
-  // Enter key for auth forms
   elements.authEmail.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') elements.authPassword.focus();
   });
@@ -73,29 +72,35 @@ function setupEventListeners() {
 // Fast auth check - use cached data first, verify in background
 async function checkAuthFast() {
   try {
-    // Get all cached data at once
-    const result = await chrome.storage.local.get(['supabaseSession', 'emails', 'premiumStatus']);
-    const session = result.supabaseSession;
+    const result = await chrome.storage.local.get(['apiToken', 'user', 'emails', 'premiumStatus']);
 
-    if (!session || !session.access_token) {
+    if (!result.apiToken) {
+      // Check for legacy supabaseSession — prompt re-login
+      const legacy = await chrome.storage.local.get(['supabaseSession']);
+      if (legacy.supabaseSession) {
+        await chrome.storage.local.remove(['supabaseSession']);
+      }
       showAuthSection();
       return;
     }
 
-    // Immediately show main content with cached data
-    currentSession = session;
-    currentUser = session.user;
+    // Show main content immediately with cached data
+    apiToken = result.apiToken;
+    currentUser = result.user || {};
     allEmails = result.emails || [];
     isPremium = result.premiumStatus || false;
 
-    // Show UI immediately with cached data
     showMainContentFast();
 
-    // Verify session and refresh data in background
-    verifySessionInBackground(session.access_token);
+    // Verify token and refresh data in background
+    verifyTokenInBackground();
   } catch (error) {
     console.error('Auth check error:', error);
-    showAuthSection();
+    // Only show auth if we truly have no token
+    const fallback = await chrome.storage.local.get(['apiToken']).catch(() => ({}));
+    if (!fallback.apiToken) {
+      showAuthSection();
+    }
   }
 }
 
@@ -104,62 +109,51 @@ function showMainContentFast() {
   elements.authSection.classList.remove('visible');
   elements.mainContent.classList.add('visible');
 
-  if (currentUser) {
+  if (currentUser?.email) {
     elements.userEmail.textContent = currentUser.email;
   }
 
-  // Update UI with cached premium status
   updatePremiumUI();
-
-  // Display cached emails immediately
   displayEmails(allEmails);
   updateStats(allEmails);
 }
 
-// Verify and refresh in background
-async function verifySessionInBackground(token) {
+// Verify token in background
+async function verifyTokenInBackground() {
   try {
-    // Verify session is still valid
-    const response = await fetch(`${CONFIG.supabaseUrl}/auth/v1/user`, {
+    const response = await fetch(`${CONFIG.functionsUrl}/auth-session`, {
       headers: {
-        'Authorization': `Bearer ${token}`,
-        'apikey': CONFIG.supabaseKey
+        'Authorization': `Bearer ${apiToken}`,
+        'Content-Type': 'application/json'
       }
     });
 
     if (!response.ok) {
-      // Token expired — ask background to refresh using the refresh token
-      console.log('[Email Extractor] Token invalid, attempting refresh...');
-      const refreshResult = await chrome.runtime.sendMessage({ type: 'REFRESH_TOKEN' });
-
-      if (refreshResult?.success && refreshResult.session) {
-        // Refresh worked — update local state and re-verify
-        currentSession = refreshResult.session;
-        currentUser = refreshResult.session.user || currentUser;
-        elements.userEmail.textContent = currentUser?.email || '';
-        refreshPremiumStatus();
-        loadEmailsFromSupabase();
-        return;
+      // Token is invalid — but don't sign out on transient errors
+      // Only sign out if we get a definitive 401
+      if (response.status === 401) {
+        console.warn('[Email Extractor] Token invalid (401)');
+        // Keep user signed in with cached data — they can sign out manually
+        // or the next sign-in will generate a new token
       }
-
-      // Refresh also failed — user must re-login
-      await clearSession();
-      showAuthSection();
       return;
     }
 
-    const user = await response.json();
-    currentUser = user;
-    elements.userEmail.textContent = user.email;
+    const data = await response.json();
+    if (data.authenticated && data.user) {
+      currentUser = data.user;
+      await chrome.storage.local.set({ user: data.user });
+      elements.userEmail.textContent = data.user.email;
+    }
 
-    // Refresh premium status in background
+    // Refresh premium status
     refreshPremiumStatus();
 
-    // Load fresh emails from Supabase in background
+    // Load fresh emails from Supabase
     loadEmailsFromSupabase();
   } catch (error) {
     console.error('Background verification error:', error);
-    // Keep using cached data on error
+    // Keep using cached data on network errors
   }
 }
 
@@ -176,12 +170,12 @@ async function refreshPremiumStatus() {
 }
 
 async function loadEmailsFromSupabase() {
-  if (!currentSession?.access_token) return;
+  if (!apiToken) return;
 
   try {
     const response = await fetch(`${CONFIG.functionsUrl}/get-emails?limit=100`, {
       headers: {
-        'Authorization': `Bearer ${currentSession.access_token}`,
+        'Authorization': `Bearer ${apiToken}`,
         'Content-Type': 'application/json'
       }
     });
@@ -189,7 +183,6 @@ async function loadEmailsFromSupabase() {
     if (response.ok) {
       const data = await response.json();
       if (data.success && data.emails) {
-        // Merge with local emails
         const emailMap = new Map();
         allEmails.forEach(e => emailMap.set(e.email, e));
         data.emails.forEach(e => emailMap.set(e.email, e));
@@ -217,40 +210,39 @@ async function handleSignIn() {
   hideAuthError();
 
   try {
-    const response = await fetch(`${CONFIG.supabaseUrl}/auth/v1/token?grant_type=password`, {
+    const response = await fetch(`${CONFIG.functionsUrl}/auth-signin`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': CONFIG.supabaseKey
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password })
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error_description || data.msg || 'Sign in failed');
+      throw new Error(data.error || 'Sign in failed');
     }
 
-    const session = {
-      access_token: data.access_token,
-      refresh_token: data.refresh_token,
-      expires_at: data.expires_at,
-      user: data.user
-    };
+    if (!data.apiToken) {
+      throw new Error('No API token received');
+    }
 
-    await saveSession(session);
+    // Store permanent token and user info
+    apiToken = data.apiToken;
     currentUser = data.user;
-    currentSession = session;
+    await chrome.storage.local.set({
+      apiToken: data.apiToken,
+      user: data.user
+    });
 
-    // Load local emails
+    // Notify background
+    chrome.runtime.sendMessage({ type: 'TOKEN_UPDATED' });
+
+    // Load emails and show main content
     const result = await chrome.storage.local.get(['emails', 'premiumStatus']);
     allEmails = result.emails || [];
     isPremium = result.premiumStatus || false;
 
     showMainContentFast();
-
-    // Refresh premium status since we just signed in
     refreshPremiumStatus();
   } catch (error) {
     showAuthError(error.message);
@@ -277,37 +269,32 @@ async function handleSignUp() {
   hideAuthError();
 
   try {
-    const response = await fetch(`${CONFIG.supabaseUrl}/auth/v1/signup`, {
+    const response = await fetch(`${CONFIG.functionsUrl}/auth-signup`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': CONFIG.supabaseKey
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password })
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error_description || data.msg || 'Sign up failed');
+      throw new Error(data.error || 'Sign up failed');
     }
 
     // Check if email confirmation is required
-    if (data.user && !data.access_token) {
+    if (data.requiresEmailConfirmation) {
       showAuthError('Account created! Check your email to verify, then sign in.', true);
       toggleAuthMode();
-    } else if (data.access_token) {
-      // Auto-confirmed, sign in immediately
-      const session = {
-        access_token: data.access_token,
-        refresh_token: data.refresh_token,
-        expires_at: data.expires_at,
-        user: data.user
-      };
-
-      await saveSession(session);
+    } else if (data.apiToken) {
+      // Auto-confirmed — sign in immediately
+      apiToken = data.apiToken;
       currentUser = data.user;
-      currentSession = session;
+      await chrome.storage.local.set({
+        apiToken: data.apiToken,
+        user: data.user
+      });
+
+      chrome.runtime.sendMessage({ type: 'TOKEN_UPDATED' });
 
       const result = await chrome.storage.local.get(['emails']);
       allEmails = result.emails || [];
@@ -324,24 +311,28 @@ async function handleSignUp() {
 
 async function handleSignOut() {
   try {
-    if (currentSession?.access_token) {
-      await fetch(`${CONFIG.supabaseUrl}/auth/v1/logout`, {
+    if (apiToken) {
+      await fetch(`${CONFIG.functionsUrl}/auth-signout`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${currentSession.access_token}`,
-          'apikey': CONFIG.supabaseKey
+          'Authorization': `Bearer ${apiToken}`,
+          'Content-Type': 'application/json'
         }
       }).catch(() => {});
     }
 
-    await clearSession();
+    await chrome.storage.local.remove(['apiToken', 'user', 'supabaseSession']);
+    await chrome.storage.local.set({ premiumStatus: false });
+    chrome.runtime.sendMessage({ type: 'TOKEN_UPDATED' });
+
+    apiToken = null;
     currentUser = null;
-    currentSession = null;
     allEmails = [];
     showAuthSection();
   } catch (error) {
     console.error('Sign out error:', error);
-    await clearSession();
+    await chrome.storage.local.remove(['apiToken', 'user', 'supabaseSession']);
+    await chrome.storage.local.set({ premiumStatus: false });
     showAuthSection();
   }
 }
@@ -363,18 +354,6 @@ function toggleAuthMode(e) {
   }
 
   hideAuthError();
-}
-
-// Session management
-async function saveSession(session) {
-  await chrome.storage.local.set({ supabaseSession: session });
-  chrome.runtime.sendMessage({ type: 'SESSION_UPDATED', session });
-}
-
-async function clearSession() {
-  await chrome.storage.local.remove(['supabaseSession']);
-  await chrome.storage.local.set({ premiumStatus: false });
-  chrome.runtime.sendMessage({ type: 'SESSION_UPDATED', session: null });
 }
 
 // UI functions
@@ -410,14 +389,12 @@ function displayEmails(emails) {
     return;
   }
 
-  // Sort by most recent
   const sorted = [...emails].sort((a, b) => {
     const dateA = new Date(b.lastSeen || b.timestamp || 0);
     const dateB = new Date(a.lastSeen || a.timestamp || 0);
     return dateA - dateB;
   });
 
-  // Show max 50 in popup
   const display = sorted.slice(0, 50);
 
   elements.emailList.innerHTML = display.map(item => `
@@ -453,7 +430,7 @@ function handleSearch() {
 
 // Actions
 async function handleSync() {
-  if (!currentSession?.access_token) {
+  if (!apiToken) {
     showNotification('Please sign in first', 'error');
     return;
   }
@@ -472,7 +449,7 @@ async function handleSync() {
     const response = await fetch(`${CONFIG.functionsUrl}/store-emails`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${currentSession.access_token}`,
+        'Authorization': `Bearer ${apiToken}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ emails })
@@ -482,7 +459,6 @@ async function handleSync() {
 
     if (response.ok && data.success) {
       showNotification(`Synced ${data.count || emails.length} emails`, 'success');
-      // Refresh emails from server
       loadEmailsFromSupabase();
     } else {
       throw new Error(data.error || 'Sync failed');
@@ -495,45 +471,27 @@ async function handleSync() {
 }
 
 function handleExport() {
-  if (!currentSession?.access_token) {
+  if (!apiToken) {
     showNotification('Please sign in first', 'error');
     return;
   }
 
-  const sessionData = {
-    access_token: currentSession.access_token,
-    refresh_token: currentSession.refresh_token,
-    expires_at: currentSession.expires_at,
-    user: currentSession.user || currentUser
-  };
-
-  const encoded = btoa(JSON.stringify(sessionData));
-  const portalUrl = `${CONFIG.portalUrl}?session=${encodeURIComponent(encoded)}&view=emails`;
+  const portalUrl = `${CONFIG.portalUrl}?token=${encodeURIComponent(apiToken)}&view=emails`;
   chrome.tabs.create({ url: portalUrl });
 }
 
 function handleOpenPortal() {
-  if (!currentSession?.access_token) {
+  if (!apiToken) {
     showNotification('Please sign in first', 'error');
     return;
   }
 
-  // Encode session for portal
-  const sessionData = {
-    access_token: currentSession.access_token,
-    refresh_token: currentSession.refresh_token,
-    expires_at: currentSession.expires_at,
-    user: currentSession.user || currentUser
-  };
-
-  const encoded = btoa(JSON.stringify(sessionData));
-  const portalUrl = `${CONFIG.portalUrl}?session=${encodeURIComponent(encoded)}`;
-
+  const portalUrl = `${CONFIG.portalUrl}?token=${encodeURIComponent(apiToken)}`;
   chrome.tabs.create({ url: portalUrl });
 }
 
 async function handleUpgrade() {
-  if (!currentSession?.access_token) {
+  if (!apiToken) {
     showNotification('Please sign in first', 'error');
     return;
   }
@@ -544,7 +502,7 @@ async function handleUpgrade() {
     const response = await fetch(`${CONFIG.functionsUrl}/create-checkout`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${currentSession.access_token}`,
+        'Authorization': `Bearer ${apiToken}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({})

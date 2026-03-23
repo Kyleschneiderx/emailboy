@@ -1,93 +1,72 @@
 import { createClient } from '@supabase/supabase-js';
-import type { Session } from '@supabase/supabase-js';
 import { supabaseConfig } from '../config/supabase';
 
 export const supabase = supabaseConfig.url && supabaseConfig.anonKey
   ? createClient(supabaseConfig.url, supabaseConfig.anonKey, {
       auth: {
-        autoRefreshToken: true,
-        persistSession: true,
+        autoRefreshToken: false,
+        persistSession: false,
       },
     })
   : null;
 
 /**
- * Reads session from URL parameters (when opened from extension)
- * and stores it in localStorage, then cleans up the URL
- * This should be called once on page load
+ * Reads API token from URL parameters (when opened from extension)
+ * and stores it in localStorage, then cleans up the URL.
+ * Called once on page load.
  */
-let urlSessionRead = false;
+let urlTokenRead = false;
 
-export function readSessionFromUrl(): Session | null {
-  // Only read from URL once
-  if (urlSessionRead) return null;
-  
+export function readTokenFromUrl(): string | null {
+  if (urlTokenRead) return null;
+
   try {
     const urlParams = new URLSearchParams(window.location.search);
-    const encodedSession = urlParams.get('session');
-    
-    if (!encodedSession) {
-      console.log('[Session] No session parameter in URL');
+    const token = urlParams.get('token');
+
+    if (!token) {
       return null;
     }
-    
-    console.log('[Session] Found session parameter in URL, decoding...');
-    
-    // Decode base64 session data
-    const sessionData = JSON.parse(atob(decodeURIComponent(encodedSession)));
-    
-    console.log('[Session] Decoded session data:', {
-      hasAccessToken: !!sessionData.access_token,
-      hasUser: !!sessionData.user,
-      expiresAt: sessionData.expires_at
-    });
-    
+
+    console.log('[Session] Found token parameter in URL');
+
     // Store in localStorage
     if (typeof Storage !== 'undefined') {
-      localStorage.setItem('supabaseSession', JSON.stringify(sessionData));
-      console.log('[Session] Stored session in localStorage');
+      localStorage.setItem('apiToken', token);
+      console.log('[Session] Stored API token in localStorage');
     }
-    
-    // Mark as read
-    urlSessionRead = true;
-    
-    // Clean up URL by removing the session parameter (for security)
+
+    urlTokenRead = true;
+
+    // Clean up URL by removing the token parameter
     const newUrl = new URL(window.location.href);
-    newUrl.searchParams.delete('session');
+    newUrl.searchParams.delete('token');
     window.history.replaceState({}, '', newUrl.toString());
-    
-    return sessionData as Session;
+
+    return token;
   } catch (error) {
-    console.error('[Session] Failed to read session from URL:', error);
-    urlSessionRead = true; // Mark as read even on error to prevent retries
+    console.error('[Session] Failed to read token from URL:', error);
+    urlTokenRead = true;
     return null;
   }
 }
 
-export function getStoredSession(): Session | null {
+export function getStoredToken(): string | null {
   try {
-    // First, check if session is in URL (from extension) - only reads once
-    const urlSession = readSessionFromUrl();
-    if (urlSession) {
-      console.log('[Session] Using session from URL');
-      return urlSession;
+    // First check URL (from extension) — only reads once
+    const urlToken = readTokenFromUrl();
+    if (urlToken) {
+      return urlToken;
     }
-    
-    // Otherwise, read from localStorage
-    const raw = localStorage.getItem('supabaseSession');
-    if (!raw) {
-      console.log('[Session] No session found in localStorage');
+
+    // Otherwise read from localStorage
+    const token = localStorage.getItem('apiToken');
+    if (!token) {
       return null;
     }
-    const session = JSON.parse(raw) as Session;
-    console.log('[Session] Using session from localStorage:', {
-      hasAccessToken: !!session.access_token,
-      hasUser: !!session.user
-    });
-    return session;
+    return token;
   } catch (error) {
-    console.error('[Session] Failed to parse stored session', error);
+    console.error('[Session] Failed to get stored token', error);
     return null;
   }
 }
-

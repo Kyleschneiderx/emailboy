@@ -1,8 +1,8 @@
 // Supabase Edge Function: get-emails
-// Handles retrieving emails with proper authentication
+// Retrieves user's collected emails
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { validateToken, isValidateError, getServiceClient } from '../_shared/validate-token.ts'
 
 const ALLOWED_ORIGINS = [
   'https://portal.emailextractorextension.com',
@@ -21,7 +21,6 @@ function getCorsHeaders(req: Request) {
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req)
 
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -31,50 +30,27 @@ serve(async (req) => {
   }
 
   try {
-    // Create Supabase client with user's auth token
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
+    const result = await validateToken(req)
+
+    if (isValidateError(result)) {
       return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: result.error }),
+        { status: result.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: authHeader },
-        },
-      }
-    )
-
-    // Verify user is authenticated
-    const {
-      data: { user },
-      error: authError
-    } = await supabaseClient.auth.getUser()
-
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized. Please sign in.' }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      )
-    }
+    const supabase = getServiceClient()
 
     // Get query parameters
     const url = new URL(req.url)
     const limit = parseInt(url.searchParams.get('limit') || '100')
     const offset = parseInt(url.searchParams.get('offset') || '0')
 
-    // Fetch user's emails (RLS will automatically filter to only this user's data)
-    const { data: emails, error } = await supabaseClient
+    // Fetch user's emails with explicit user_id filter (service role bypasses RLS)
+    const { data: emails, error } = await supabase
       .from('collected_emails')
       .select('*')
+      .eq('user_id', result.userId)
       .order('last_seen', { ascending: false })
       .range(offset, offset + limit - 1)
 
@@ -83,7 +59,6 @@ serve(async (req) => {
       throw error
     }
 
-    // Transform to match extension format
     const transformedEmails = (emails || []).map(item => ({
       email: item.email,
       domain: item.domain,
@@ -99,20 +74,13 @@ serve(async (req) => {
         emails: transformedEmails,
         count: transformedEmails.length
       }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error: any) {
     console.error('Edge function error:', error)
     return new Response(
-      JSON.stringify({
-        error: 'Internal server error'
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
+      JSON.stringify({ error: 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })
