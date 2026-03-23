@@ -41,7 +41,10 @@ export function AuthGuard({ children }: AuthGuardProps) {
       const endpoint = isSignUp ? 'auth-signup' : 'auth-signin';
       const response = await fetch(`${supabaseConfig.functionsUrl}/${endpoint}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseConfig.anonKey}`,
+        },
         body: JSON.stringify({ email, password }),
       });
 

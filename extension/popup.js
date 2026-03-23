@@ -212,7 +212,10 @@ async function handleSignIn() {
   try {
     const response = await fetch(`${CONFIG.functionsUrl}/auth-signin`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${CONFIG.supabaseKey}`
+      },
       body: JSON.stringify({ email, password })
     });
 
@@ -271,7 +274,10 @@ async function handleSignUp() {
   try {
     const response = await fetch(`${CONFIG.functionsUrl}/auth-signup`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${CONFIG.supabaseKey}`
+      },
       body: JSON.stringify({ email, password })
     });
 
