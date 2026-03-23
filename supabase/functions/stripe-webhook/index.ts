@@ -65,6 +65,18 @@ serve(async (req) => {
     // Create Supabase admin client
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
 
+    // Helper: extract period dates from subscription object
+    // Newer Stripe API versions (2026+) moved these to items.data[0]
+    function getPeriodDates(sub: any) {
+      const item = sub.items?.data?.[0]
+      const periodStart = sub.current_period_start ?? item?.current_period_start
+      const periodEnd = sub.current_period_end ?? item?.current_period_end
+      return {
+        current_period_start: periodStart ? new Date(periodStart * 1000).toISOString() : null,
+        current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+      }
+    }
+
     // Handle events
     switch (event.type) {
       case 'checkout.session.completed': {
@@ -90,14 +102,14 @@ serve(async (req) => {
         // Get subscription details from Stripe
         const subscription = await stripe.subscriptions.retrieve(subscriptionId)
 
+        const periods = getPeriodDates(subscription)
         const subscriptionData = {
           user_id: userId,
           stripe_subscription_id: subscription.id,
           stripe_customer_id: subscription.customer as string,
           status: subscription.status,
           plan: 'premium',
-          current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-          current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+          ...periods,
           cancel_at_period_end: subscription.cancel_at_period_end,
           updated_at: new Date().toISOString()
         }
@@ -124,12 +136,12 @@ serve(async (req) => {
           .single()
 
         if (existing) {
+          const periods = getPeriodDates(subscription)
           const { error } = await supabaseAdmin
             .from('user_subscriptions')
             .update({
               status: subscription.status,
-              current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-              current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+              ...periods,
               cancel_at_period_end: subscription.cancel_at_period_end,
               updated_at: new Date().toISOString()
             })
@@ -156,11 +168,12 @@ serve(async (req) => {
             .single()
 
           if (existing) {
+            const periods = getPeriodDates(subscription)
             await supabaseAdmin
               .from('user_subscriptions')
               .update({
                 status: subscription.status,
-                current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+                ...periods,
                 updated_at: new Date().toISOString()
               })
               .eq('user_id', existing.user_id)
