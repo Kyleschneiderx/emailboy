@@ -1,5 +1,4 @@
 import { supabaseConfig } from '../config/supabase';
-import { clearApiToken } from '../lib/sessionValidation';
 
 const functionsUrl = supabaseConfig.functionsUrl;
 
