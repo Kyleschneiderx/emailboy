@@ -289,6 +289,7 @@
   let isRunning = false;
   let isPremiumCached = null;
   let lastPremiumCheck = 0;
+  let premiumCacheTTL = 30000; // Default 30s, background can extend during backoff
 
   // ============================================
   // PREMIUM CHECK
@@ -297,8 +298,8 @@
   function checkPremium(callback) {
     const now = Date.now();
 
-    // Use cache for 30 seconds
-    if (isPremiumCached !== null && now - lastPremiumCheck < 30000) {
+    // Use dynamic cache TTL (background extends this during auth backoff)
+    if (isPremiumCached !== null && now - lastPremiumCheck < premiumCacheTTL) {
       callback(isPremiumCached);
       return;
     }
@@ -312,7 +313,10 @@
         }
         isPremiumCached = response && response.isPremium === true;
         lastPremiumCheck = now;
-        console.log('[Email Extractor] Premium status:', isPremiumCached);
+        // Adopt the TTL suggested by the background worker
+        if (response && response.cacheTTL) {
+          premiumCacheTTL = response.cacheTTL;
+        }
         callback(isPremiumCached);
       });
     } catch (e) {

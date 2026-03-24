@@ -16,6 +16,19 @@ let premiumCache = {
 };
 const PREMIUM_CACHE_TTL = 60000;
 
+// Auth backoff state — prevents 401 flood when token is invalid
+let authBackoff = {
+  consecutiveFailures: 0,
+  nextRetryAt: 0,
+  isTokenSuspect: false
+};
+const MAX_AUTH_BACKOFF_MS = 30 * 60 * 1000; // 30 minutes
+const MAX_SERVER_BACKOFF_MS = 5 * 60 * 1000; // 5 minutes
+
+function calculateBackoff(failures, maxMs) {
+  return Math.min(60000 * Math.pow(2, failures - 1), maxMs);
+}
+
 // ============================================
 // TOKEN HELPERS
 // ============================================
@@ -76,24 +89,28 @@ async function handleMessage(message, sender) {
       return { success: true };
 
     case 'TOKEN_UPDATED':
-      // Token was set/cleared — refresh premium status
+      // Token was set/cleared — reset backoff and refresh premium status
+      authBackoff = { consecutiveFailures: 0, nextRetryAt: 0, isTokenSuspect: false };
       premiumCache = { isPremium: premiumCache.isPremium, lastChecked: 0, checkInProgress: null };
       const updatedStatus = await checkPremiumStatus(true);
       return { success: true, isPremium: updatedStatus };
 
-    case 'CHECK_PREMIUM':
+    case 'CHECK_PREMIUM': {
       const now = Date.now();
-      const isStale = now - premiumCache.lastChecked >= PREMIUM_CACHE_TTL;
+      // During backoff, return cached value immediately with extended TTL
+      const effectiveTTL = authBackoff.isTokenSuspect ? MAX_SERVER_BACKOFF_MS : PREMIUM_CACHE_TTL;
 
       if (premiumCache.isPremium && premiumCache.lastChecked > 0) {
+        const isStale = now - premiumCache.lastChecked >= effectiveTTL;
         if (isStale) {
           checkPremiumStatus().catch(() => {});
         }
-        return { isPremium: premiumCache.isPremium };
+        return { isPremium: premiumCache.isPremium, cacheTTL: effectiveTTL };
       }
 
-      const isPremium = await checkPremiumStatus(isStale);
-      return { isPremium };
+      const isPremium = await checkPremiumStatus(now - premiumCache.lastChecked >= effectiveTTL);
+      return { isPremium, cacheTTL: effectiveTTL };
+    }
 
     case 'SYNC_NOW':
       return await syncToSupabase();
@@ -113,6 +130,11 @@ async function handleMessage(message, sender) {
 
 async function checkPremiumStatus(forceRefresh = false) {
   const now = Date.now();
+
+  // Respect backoff window unless this is a force refresh after TOKEN_UPDATED
+  if (!forceRefresh && now < authBackoff.nextRetryAt) {
+    return premiumCache.isPremium;
+  }
 
   if (!forceRefresh && now - premiumCache.lastChecked < PREMIUM_CACHE_TTL) {
     return premiumCache.isPremium;
@@ -145,10 +167,26 @@ async function checkPremiumStatus(forceRefresh = false) {
       });
 
       if (!response.ok) {
-        // Keep current cached value on errors
+        if (response.status === 401) {
+          // Auth failure — token is invalid/deleted. Back off exponentially.
+          authBackoff.consecutiveFailures++;
+          authBackoff.isTokenSuspect = true;
+          authBackoff.nextRetryAt = now + calculateBackoff(authBackoff.consecutiveFailures, MAX_AUTH_BACKOFF_MS);
+          console.warn(`[Email Extractor] Token rejected (401). Backoff #${authBackoff.consecutiveFailures}, next retry in ${Math.round((authBackoff.nextRetryAt - now) / 1000)}s`);
+        } else {
+          // Server error (500, 503, etc.) — shorter backoff
+          authBackoff.consecutiveFailures++;
+          authBackoff.nextRetryAt = now + calculateBackoff(authBackoff.consecutiveFailures, MAX_SERVER_BACKOFF_MS);
+          console.warn(`[Email Extractor] Server error (${response.status}). Backoff #${authBackoff.consecutiveFailures}`);
+        }
+
+        // Always preserve last-known premium status from storage
         premiumCache.lastChecked = now;
         return premiumCache.isPremium;
       }
+
+      // Success — reset all backoff state
+      authBackoff = { consecutiveFailures: 0, nextRetryAt: 0, isTokenSuspect: false };
 
       const data = await response.json();
       premiumCache.isPremium = data.isPremium === true;
@@ -157,7 +195,10 @@ async function checkPremiumStatus(forceRefresh = false) {
 
       return premiumCache.isPremium;
     } catch (error) {
-      console.error('Premium check error:', error);
+      // Network error — short backoff, preserve cached status
+      authBackoff.consecutiveFailures++;
+      authBackoff.nextRetryAt = now + calculateBackoff(authBackoff.consecutiveFailures, MAX_SERVER_BACKOFF_MS);
+      console.error('Premium check network error:', error.message);
       premiumCache.lastChecked = now;
       return premiumCache.isPremium;
     } finally {
@@ -226,6 +267,11 @@ async function handleNewEmails(emails, url, timestamp) {
 // ============================================
 
 async function syncToSupabase() {
+  // Skip sync if token is known to be invalid
+  if (authBackoff.isTokenSuspect) {
+    return { success: false, reason: 'auth_backoff', message: 'Sync paused — sign out and sign back in to refresh your session' };
+  }
+
   try {
     const result = await chrome.storage.local.get(['emails']);
     const emails = result.emails || [];
@@ -250,9 +296,17 @@ async function syncToSupabase() {
     });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        authBackoff.consecutiveFailures++;
+        authBackoff.isTokenSuspect = true;
+        authBackoff.nextRetryAt = Date.now() + calculateBackoff(authBackoff.consecutiveFailures, MAX_AUTH_BACKOFF_MS);
+      }
       const error = await response.json().catch(() => ({ error: response.statusText }));
       throw new Error(error.error || 'Sync failed');
     }
+
+    // Success — reset backoff
+    authBackoff = { consecutiveFailures: 0, nextRetryAt: 0, isTokenSuspect: false };
 
     const data = await response.json();
 
@@ -303,6 +357,8 @@ function showSyncError() {
 chrome.webNavigation?.onCommitted?.addListener(async (details) => {
   if (details.url.includes(CONFIG.portalUrl) && details.url.includes('checkout=success')) {
     console.log('Checkout success detected');
+    // Reset backoff on checkout success — user just paid
+    authBackoff = { consecutiveFailures: 0, nextRetryAt: 0, isTokenSuspect: false };
     setTimeout(() => checkPremiumStatus(true), 2000);
   }
 });

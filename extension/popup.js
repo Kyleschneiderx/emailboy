@@ -118,7 +118,7 @@ function showMainContentFast() {
   updateStats(allEmails);
 }
 
-// Verify token in background
+// Verify token in background — NEVER signs out, ALWAYS refreshes premium + emails
 async function verifyTokenInBackground() {
   try {
     const response = await fetch(`${CONFIG.functionsUrl}/auth-session`, {
@@ -128,33 +128,27 @@ async function verifyTokenInBackground() {
       }
     });
 
-    if (!response.ok) {
-      // Token is invalid — but don't sign out on transient errors
-      // Only sign out if we get a definitive 401
-      if (response.status === 401) {
-        console.warn('[Email Extractor] Token invalid (401)');
-        // Keep user signed in with cached data — they can sign out manually
-        // or the next sign-in will generate a new token
+    if (response.ok) {
+      const data = await response.json();
+      if (data.authenticated && data.user) {
+        currentUser = data.user;
+        await chrome.storage.local.set({ user: data.user });
+        elements.userEmail.textContent = data.user.email;
       }
-      return;
+    } else if (response.status === 401) {
+      console.warn('[Email Extractor] auth-session returned 401 — keeping cached session, continuing with premium refresh');
     }
-
-    const data = await response.json();
-    if (data.authenticated && data.user) {
-      currentUser = data.user;
-      await chrome.storage.local.set({ user: data.user });
-      elements.userEmail.textContent = data.user.email;
-    }
-
-    // Refresh premium status
-    refreshPremiumStatus();
-
-    // Load fresh emails from Supabase
-    loadEmailsFromSupabase();
+    // On any error (401, 500, etc.): fall through to refresh premium and load emails.
+    // Never return early — the background service worker handles backoff for API calls.
   } catch (error) {
     console.error('Background verification error:', error);
-    // Keep using cached data on network errors
+    // Network error — fall through to use cached data
   }
+
+  // ALWAYS attempt premium refresh and email load, regardless of auth-session result.
+  // The background worker's checkPremiumStatus handles backoff and caching.
+  refreshPremiumStatus();
+  loadEmailsFromSupabase();
 }
 
 async function refreshPremiumStatus() {
@@ -190,8 +184,12 @@ async function loadEmailsFromSupabase() {
         displayEmails(allEmails);
         updateStats(allEmails);
       }
+    } else if (response.status === 401) {
+      // Token invalid for email fetch — keep displaying locally cached emails
+      console.warn('[Email Extractor] get-emails 401 — using local cache');
     }
   } catch (error) {
+    // Network error — keep displaying locally cached emails
     console.error('Error loading from Supabase:', error);
   }
 }

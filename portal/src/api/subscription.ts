@@ -25,9 +25,10 @@ async function request<T>(path: string, token: string, options?: RequestInit) {
 
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) {
-      // Token is invalid — clear it and prompt re-login
-      clearApiToken();
-      throw new Error('Session expired. Please sign in again.');
+      // Token may be temporarily invalid — do NOT clear it.
+      // The user should never be signed out automatically.
+      // They can manually sign out if needed.
+      throw new Error('Unable to verify session. Please try again or sign out and sign back in.');
     }
     throw new Error(data.error || 'Request failed');
   }

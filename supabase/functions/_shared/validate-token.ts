@@ -44,6 +44,14 @@ export async function validateToken(req: Request): Promise<ValidateSuccess | Val
     return { error: 'User not found', status: 401 }
   }
 
+  // Fire-and-forget: update last_used_at for token activity tracking
+  supabase
+    .from('user_api_tokens')
+    .update({ last_used_at: new Date().toISOString() })
+    .eq('token', token)
+    .then(() => {})
+    .catch(() => {})
+
   return { userId: data.user_id, email: userData.user.email! }
 }
 

@@ -61,8 +61,8 @@ export function SubscriptionPortal() {
       setData(response);
     } catch (err) {
       console.error('[LoadData] Error fetching subscription:', err);
-      if (err instanceof Error && (err.message.includes('Unauthorized') || err.message.includes('Session expired'))) {
-        setError('Session expired. Please sign in again.');
+      if (err instanceof Error && (err.message.includes('Unable to verify') || err.message.includes('Session expired'))) {
+        setError('Unable to load subscription data. Please try refreshing or sign out and sign back in.');
       } else {
         setError(err instanceof Error ? err.message : 'Failed to load subscription.');
       }
@@ -91,8 +91,8 @@ export function SubscriptionPortal() {
       setEmails(response.emails || []);
     } catch (err) {
       console.error('[LoadEmails] Error fetching emails:', err);
-      if (err instanceof Error && (err.message.includes('Unauthorized') || err.message.includes('Session expired'))) {
-        setEmailsError('Session expired. Please sign in again.');
+      if (err instanceof Error && (err.message.includes('Unable to verify') || err.message.includes('Session expired'))) {
+        setEmailsError('Unable to load emails. Please try refreshing or sign out and sign back in.');
       } else {
         setEmailsError(err instanceof Error ? err.message : 'Failed to load emails.');
       }

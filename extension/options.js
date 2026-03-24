@@ -65,6 +65,13 @@ async function checkPremiumStatus() {
   const statusContainer = document.getElementById('statusContainer');
   const statusText = document.getElementById('statusText');
 
+  // Show cached status immediately while fetching fresh data
+  const cached = await chrome.storage.local.get(['premiumStatus']);
+  if (cached.premiumStatus) {
+    statusContainer.classList.add('premium');
+    statusText.textContent = 'Premium Active';
+  }
+
   try {
     const response = await fetch(`${CONFIG.functionsUrl}/check-subscription`, {
       headers: {
@@ -74,6 +81,15 @@ async function checkPremiumStatus() {
     });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        console.warn('[Email Extractor] options: check-subscription 401 — using cached status');
+        // Keep whatever cached status is showing; don't overwrite with "Unknown"
+        if (!cached.premiumStatus) {
+          statusContainer.classList.remove('premium');
+          statusText.textContent = 'Free Plan';
+        }
+        return;
+      }
       throw new Error('Failed to check subscription');
     }
 
@@ -88,7 +104,10 @@ async function checkPremiumStatus() {
     }
   } catch (error) {
     console.error('Premium check error:', error);
-    statusText.textContent = 'Status Unknown';
+    // On network/server error, keep cached status instead of showing "Unknown"
+    if (!cached.premiumStatus) {
+      statusText.textContent = 'Free Plan';
+    }
   }
 }
 
