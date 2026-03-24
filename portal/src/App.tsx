@@ -27,9 +27,25 @@ function App() {
       return;
     }
 
-    // Try to read token from URL (when opened from extension)
-    const urlToken = readTokenFromUrl();
+    // Check for token in URL first (highest priority — opened from extension)
+    const urlTokenParam = searchParams.get('token');
+    if (urlTokenParam) {
+      // Store token and clean URL
+      try {
+        localStorage.setItem('apiToken', urlTokenParam);
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete('token');
+        window.history.replaceState({}, '', cleanUrl.toString());
+      } catch (e) {
+        console.error('[App] Failed to store token from URL:', e);
+      }
+      setHasSession(true);
+      setIsLandingPage(false);
+      return;
+    }
 
+    // Also call readTokenFromUrl for backwards compat (no-op if already read above)
+    const urlToken = readTokenFromUrl();
     if (urlToken) {
       setHasSession(true);
       setIsLandingPage(false);
@@ -48,13 +64,6 @@ function App() {
     const legacySession = localStorage.getItem('supabaseSession');
     if (legacySession) {
       localStorage.removeItem('supabaseSession');
-    }
-
-    // Check if token param exists in URL (even if parsing failed)
-    if (searchParams.has('token')) {
-      setHasSession(false);
-      setIsLandingPage(false);
-      return;
     }
 
     // Check for upgrade, checkout, or signup params (should show dashboard)
